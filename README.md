@@ -41,6 +41,6 @@ Thanks to the great work by [dgraziotin](https://github.com/dgraziotin), data in
 
 This repo is in its early initiation stage and we hope to improve it over time. Feel free to contribute, test and support this work.
 
-A special thank you goes to members of the open-source community who have provided the community with the code that was used in this repo.
+A special thank you goes to [pvanheus](https://github.com/pvanheus) for suggesting to create a docker for Mecodify. I also wish to thank members of the open-source community who have provided the community with the code that was used in this repo.
 
 Mecodify developer: [Walid Al-Saqaf](https://github.com/wsaqaf)
