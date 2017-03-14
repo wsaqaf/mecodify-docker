@@ -22,7 +22,7 @@ You will find the file configurations.php in the mecodify folder. Go there and a
 
 To create the docker container and run mecodify directly from the localhost, ensure that port 80 is free and if it is not, feel free to change "80:" to any available port such as "8080:", then run:
 
-        docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app -e MYSQL_USER_NAME="admin" -e MYSQL_USER_PASS="mecodify_pw" -e MYSQL_USER_DB="MECODIFY" --name mecodify wsaqaf/mecodify
+        docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app -e MYSQL_USER_NAME="admin" -e MYSQL_ADMIN_PASS="mecodify_pw" -e MYSQL_USER_DB="MECODIFY" --name mecodify wsaqaf/mecodify
 
 Notice that the above database name, user name and passwords are possible to alter to your liking but they have to match exactly what exists in the configurations.php file in the ./mecodify directory. The above settings should be working by default since they are what the configuration file contains by default.
 
