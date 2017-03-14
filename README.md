@@ -24,7 +24,7 @@ To create the docker container and run mecodify directly from the localhost, ens
 
         docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app --name mecodify wsaqaf/mecodify
 
-Notice that the above database name, user name and passwords are set to 'mecodify', 'root', and <blank> by default in the configurations.php file located in the ./mecodify directory. 
+Notice that the above database name and user name and passwords are set to 'mecodify' and 'root' while the password is left blank by default in the configurations.php file located in the ./mecodify directory. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
 
 Once the container is successfully created and is running in the background (you can check by running 'docker ps'), you are ready to test by opening localhost in your browser. You should then find Mecodify's main page if everything works fine.
 
