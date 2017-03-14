@@ -16,15 +16,15 @@ The above command may take a few minutes or more (depending on your connection a
 
 ##### 2) Configure mecodify/configurations.php
 
-You will find the file configurations.php in the mecodify folder. Go there and add the details as instructed. The only compulsory entry would be the email of the admin as well as the Twitter API credentials since it will not be possible for mecodify to extract tweets without them. Everything else can remain the same although it is good practice to change them to something that works for you.
+You will find the file configurations.php in the mecodify folder. Go there and add the details as instructed. The only compulsory entry would be *the Twitter API credentials* since it will not be possible for mecodify to extract tweets without them. Everything else can remain the same although it is good practice to change them to something that works for you.
 
 ##### 3) Create container
 
 To create the docker container and run mecodify directly from the localhost, ensure that port 80 is free and if it is not, feel free to change "80:" to any available port such as "8080:", then run:
 
-        docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app -e MYSQL_USER_NAME="admin" -e MYSQL_ADMIN_PASS="mecodify_pw" -e MYSQL_USER_DB="MECODIFY" --name mecodify wsaqaf/mecodify
+        docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app --name mecodify wsaqaf/mecodify
 
-Notice that the above database name, user name and passwords are possible to alter to your liking but they have to match exactly what exists in the configurations.php file in the ./mecodify directory. The above settings should be working by default since they are what the configuration file contains by default.
+Notice that the above database name, user name and passwords are set to 'mecodify', 'root', and <blank> by default in the configurations.php file located in the ./mecodify directory. 
 
 Once the container is successfully created and is running in the background (you can check by running 'docker ps'), you are ready to test by opening localhost in your browser. You should then find Mecodify's main page if everything works fine.
 
