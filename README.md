@@ -8,7 +8,7 @@ This repo is based on a repo [osx-docker-lamp](https://github.com/dgraziotin/osx
 
 ##### 1) Create image
 
-Assuming that you already have docker installed (get it from [here](https://docs.docker.com/engine/installation/) if you don't), go to the main directory where the Dockerfile file is and run:
+Assuming that you already have docker installed (get it from [here](https://docs.docker.com/engine/installation/) if you don't), go to the main directory where the Dockerfile file is and run (note: depending on your priviliges, you may need to run the below commans as admin):
 
         docker build -t wsaqaf/mecodify .
 
