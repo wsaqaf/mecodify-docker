@@ -22,7 +22,7 @@ To create the docker container and run mecodify directly from the localhost, ens
 
 Notice that the above database name and user name and passwords are set to 'mecodify' and 'root' while the password is left blank by default in the configurations.php file located in the ./mecodify directory. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
 
-##### 3) Configure mecodify/configurations.php
+##### 3) Add Twitter API Settings
 
 You will find the file configurations.php in the mecodify folder. Go there and fill in the values for the *twitter_api_settings* variable since it will not be possible for mecodify to extract tweets without doing so. Check [this informative tutorial](http://docs.inboundnow.com/guide/create-twitter-application/) on how to create your Twitter app and get the required credentials, namely the following four lines need to be filled:
 
