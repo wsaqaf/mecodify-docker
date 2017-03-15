@@ -14,7 +14,15 @@ Assuming that you already have docker installed (get it from [here](https://docs
 
 The above command may take a few minutes or more (depending on your connection and processor speed) and should create two docker images, one for wsaqaf/mecodify and one for the Ubuntu base image (phusion/baseimage). The total could taking just over 900MB storage since they include a lot of files for ubuntu, apache, php, phpmyadmin, mysql along with mecodify.
 
-##### 2) Configure mecodify/configurations.php
+##### 2) Create container
+
+To create the docker container and run mecodify directly from the localhost, ensure that port 80 is free and if it is not, feel free to change "80:" to any available port such as "8080:", then run:
+
+        docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app --name mecodify wsaqaf/mecodify
+
+Notice that the above database name and user name and passwords are set to 'mecodify' and 'root' while the password is left blank by default in the configurations.php file located in the ./mecodify directory. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
+
+##### 3) Configure mecodify/configurations.php
 
 You will find the file configurations.php in the mecodify folder. Go there and fill in the values for the *twitter_api_settings* variable since it will not be possible for mecodify to extract tweets without doing so. Check [this informative tutorial](http://docs.inboundnow.com/guide/create-twitter-application/) on how to create your Twitter app and get the required credentials, namely the following four lines need to be filled:
 
@@ -25,17 +33,13 @@ You will find the file configurations.php in the mecodify folder. Go there and f
         
 Everything else in the configuration file can remain the same.
 
-##### 3) Create container
+##### 4) Update the container with the new configuration file
 
-To create the docker container and run mecodify directly from the localhost, ensure that port 80 is free and if it is not, feel free to change "80:" to any available port such as "8080:", then run:
+Any time you update the configurations.php file, you have to ensure that the copied into the container. This can be done by running the following command in the same folder where configurations.php is located:
 
-        docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app --name mecodify wsaqaf/mecodify
-
-Notice that the above database name and user name and passwords are set to 'mecodify' and 'root' while the password is left blank by default in the configurations.php file located in the ./mecodify directory. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
-
-Once the container is successfully created and is running in the background (you can check by running 'docker ps'), you are ready to test by opening localhost in your browser. You should then find Mecodify's main page if everything works fine.
-
-##### 4) Start using mecodify
+        docker cp configurations.php `docker ps -aqf "name=mecodify"`:/var/www/html
+        
+##### 5) Start using mecodify
 
 Open [localhost](http://localhost) with your browser. In case you decided to use a port other than the default 80, don't forget to include it (e.g, if it is 8080, go to localhost:8080).
 From this point onwards, you can follow the instructions found in the original [GitHub repo of Mecodify](https://github.com/wsaqaf/mecodify/blob/master/manual.md) to create accounts and add cases.
