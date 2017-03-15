@@ -16,7 +16,14 @@ The above command may take a few minutes or more (depending on your connection a
 
 ##### 2) Configure mecodify/configurations.php
 
-You will find the file configurations.php in the mecodify folder. Go there and add the details as instructed. The only compulsory entry would be *the Twitter API credentials* since it will not be possible for mecodify to extract tweets without them. Check [this informative tutorial](http://docs.inboundnow.com/guide/create-twitter-application/) on how to create your Twitter app and get the required credentials. Everything else can remain the same although it is good practice to change them to something that works for you.
+You will find the file configurations.php in the mecodify folder. Go there and fill in the values for the *twitter_api_settings* variable since it will not be possible for mecodify to extract tweets without doing so. Check [this informative tutorial](http://docs.inboundnow.com/guide/create-twitter-application/) on how to create your Twitter app and get the required credentials, namely the following four lines need to be filled:
+
+          'oauth_access_token' => "",
+          'oauth_access_token_secret' => "",
+          'consumer_key' => "",
+          'consumer_secret' => ""
+        
+Everything else in the configuration file can remain the same.
 
 ##### 3) Create container
 
