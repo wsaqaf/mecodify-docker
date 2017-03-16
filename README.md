@@ -4,23 +4,21 @@ This is a GitHub repo for those wishing to create a functional Ubuntu-based serv
 
 This repo is based on a repo [osx-docker-lamp](https://github.com/dgraziotin/osx-docker-lamp), a.k.a dgraziotin/lamp, which itself is a fork of [tutumcloud/tutum-docker-lamp](https://github.com/tutumcloud/lamp). I made a few modifications and added the mecodify-related files that are necessary for the application to work. 
 
+So far, this repo has been demonstrated to work on Mac OSx but not on Windows. If you wish to provide feedback on how to adjust it to work on a Windows machine, please [contact us](mailto:admin@mecodify.org).
+
 ### Usage
 
-##### 1) Create image
+##### 1) Download repo
 
-Assuming that you already have docker installed (get it from [here](https://docs.docker.com/engine/installation/) if you don't), go to the main directory where the Dockerfile file is and run (note: depending on your priviliges, you may need to run the below commans as admin):
+You can download the compressed files in [this repo](https://github.com/wsaqaf/mecodify-docker/archive/master.zip) and uncompress it on your device. Then you should use the command prompt (Terminal) to go inside the folder that is just created.
+
+##### 2) Create the docker images
+
+Assuming that you already have docker installed (get it from [here](https://docs.docker.com/engine/installation/) if you don't), in the directory where the Dockerfile file is located, run the following:
 
         docker build -t wsaqaf/mecodify .
-
+ 
 The above command may take a few minutes or more (depending on your connection and processor speed) and should create two docker images, one for wsaqaf/mecodify and one for the Ubuntu base image (phusion/baseimage). The total could taking just over 900MB storage since they include a lot of files for ubuntu, apache, php, phpmyadmin, mysql along with mecodify.
-
-##### 2) Create container
-
-To create the docker container and run mecodify directly from the localhost, ensure that port 80 is free and if it is not, feel free to change "80:" to any available port such as "8080:", then run:
-
-        docker run -d -i -t -p "80:80" -p "3306:3306" -v ${PWD}/mysql:/var/lib/mysql -v ${PWD}/app:/app --name mecodify wsaqaf/mecodify
-
-Notice that the above database name and user name and passwords are set to 'mecodify' and 'root' while the password is left blank by default in the configurations.php file located in the ./mecodify directory. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
 
 ##### 3) Add Twitter API Settings
 
@@ -33,20 +31,26 @@ You will find the file configurations.php in the mecodify folder. Go there and f
         
 Everything else in the configuration file can remain the same.
 
-##### 4) Update the container with the new configuration file
+##### 4) Create container (needed every time docker is restared or configurations.org is modified)
 
-Any time you update the configurations.php file, you have to ensure that the copied into the container. This can be done by running the following command in the same folder where configurations.php is located:
+Run the following command from on the terminal window while in the folder where Dockerfile is located:
 
-        docker cp configurations.php `docker ps -aqf "name=mecodify"`:/var/www/html
-        
+    . go.sh
+
+The above command would run the container and have it accessible via port 80. If the port is being used by another server, it can be changed by modifying the relevant line in the go.sh file.
+
 ##### 5) Start using mecodify
 
 Open [localhost](http://localhost) with your browser. In case you decided to use a port other than the default 80, don't forget to include it (e.g, if it is 8080, go to localhost:8080).
 From this point onwards, you can follow the instructions found in the original [GitHub repo of Mecodify](https://github.com/wsaqaf/mecodify/blob/master/manual.md) to create accounts and add cases.
 
-##### Note about persistence
+##### Notes
 
-Thanks to the great work by [dgraziotin](https://github.com/dgraziotin), data in the folders mysql and app folders (in our case ./mecodify) are made so that they are persistent and updated in parallel both in the container and in the host. So whatever work you do on mecodify will be preserved. You can double check to make sure.
+###### Thanks to the great work by [dgraziotin](https://github.com/dgraziotin), data in the folders mysql and app folders (in our case ./mecodify) are made so that they are persistent and updated in parallel both in the container and in the host. So whatever work you do on mecodify will be preserved. You can double check to make sure.
+
+###### Apart fromt he Twitter API settings, the configurations.php file located in the ./mecodify directory has default values including the database and user name. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
+       
+###### Only step (4) above is required when docker is restarted since the images are preserved in the file system. All the steps would need to be re-done if the files are removed or docker re-installed.  
 
 ##### Still experimental
 
