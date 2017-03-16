@@ -31,7 +31,7 @@ You will find the file configurations.php in the mecodify folder. Go there and f
         
 Everything else in the configuration file can remain the same.
 
-##### 4) Create container (needed every time docker is restared or configurations.org is modified)
+##### 4) Create container (needed when docker is restared or configurations.php is modified)
 
 Run the following command from on the terminal window while in the folder where Dockerfile is located:
 
