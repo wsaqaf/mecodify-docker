@@ -36,14 +36,6 @@ function showtip(field)
  			 });
   }
 
-function show_date()
-  {
-    var selectBox = document.getElementById("case_search_method");
-    var selectedValue = selectBox.options[selectBox.selectedIndex].value;
-    if (selectedValue=="2") { $('.datefield').show(); }
-     else { $('.datefield').hide(); }
-  }
-
 function hidetip(field) { $('.tip').html(''); }
 
 		$(document).ready(function(){
@@ -334,43 +326,44 @@ if( /[^a-zA-Z0-9_]/.test(case_id) ) {
        alert('The case ID has to be alphanumeric (only alphabets or numbers and no space)');
        return false;
     }
-                                                var case_name=document.getElementById("case_name").value;
-if (!case_name) { alert('The case name cannot be blank'); return false; }
-                                                var case_platform=document.getElementById("case_platform").value;
-                                                var case_search_method=document.getElementById("case_search_method").value;
-                                                var case_top_only=getBoxValue("case_top_only");
-                                                if (case_top_only=="on") case_top_only=1; else case_top_only=0;
-                                                var case_query=document.getElementById("case_query").value;
-if (!case_query) { alert('The case query cannot be blank'); return false; }
-                                                var case_from=document.getElementById("case_from").value;
-                                                var case_to=document.getElementById("case_to").value;
-                                                var case_details=document.getElementById("case_details").value;
-                                                var case_details_url=document.getElementById("case_details_url").value;
-                                                var case_flags=document.getElementById("case_flags").value;
-                                                var case_private=document.getElementById("case_private").value;
-                                                var email=document.getElementById("email").value;
-                                                var ajax = $.ajax({type: 'POST', url: 'login.php',
-                                                                                data: { action: action, email: email, case_id: case_id, case_name: case_name, case_platform: case_platform, case_search_method: case_search_method,
-                                                                                                                                                case_top_only: case_top_only, case_query: case_query, case_from: case_from, case_to: case_to,
-                                                                                                                                                case_details: case_details, case_details_url: case_details_url, case_flags: case_flags, case_private: case_private},
-                                                                complete: function(response)
-                                                                                        {
-        //                                                                                      alert('success!');
-                                                                                $( "#chartcontainer").html(response.responseText);
-                                                                                        },
-                                                                                error: function ()
-                                                                                        {
-        //                                                                                      alert('error!');
-                                                                                                $('#chartcontainer').html('error!');
-                                                                                        }
-                                                });
-                                                        ajax.fail(function (jqXHr, textStatus, errorThrown) {
-                                                            $("#chartcontainer").html(jqXHr.responseText);
-                                                        });
-                                                if (action=="submit_case") { toggle_login(); }
-                                                $('#tweetcontainer').html('');
-                                                return false;
-                                        }
+		var case_name=document.getElementById("case_name").value;
+		if (!case_name) { alert('The case name cannot be blank'); return false; }
+		var case_platform=document.getElementById("case_platform").value;
+		var case_include_retweets=getBoxValue("case_include_retweets");
+		if (case_include_retweets=="on") case_include_retweets=1; else case_include_retweets=0;
+		var case_top_only=getBoxValue("case_top_only");
+		if (case_top_only=="on") case_top_only=1; else case_top_only=0;
+		var case_query=document.getElementById("case_query").value;
+		if (!case_query) { alert('The case query cannot be blank'); return false; }
+		var case_from=document.getElementById("case_from").value;
+		var case_to=document.getElementById("case_to").value;
+		var case_details=document.getElementById("case_details").value;
+		var case_details_url=document.getElementById("case_details_url").value;
+		var case_flags=document.getElementById("case_flags").value;
+		var case_private=document.getElementById("case_private").value;
+		var email=document.getElementById("email").value;
+		var ajax = $.ajax({type: 'POST', url: 'login.php',
+						data: { action: action, email: email, case_id: case_id, case_name: case_name, case_platform: case_platform,
+														case_include_retweets: case_include_retweets, case_top_only: case_top_only, case_query: case_query, case_from: case_from, case_to: case_to,
+														case_details: case_details, case_details_url: case_details_url, case_flags: case_flags, case_private: case_private},
+              complete: function(response)
+                                      {
+//                                                                                      alert('success!');
+                              $( "#chartcontainer").html(response.responseText);
+                                      },
+              error: function ()
+                      {
+//                                                                                      alert('error!');
+                              $('#chartcontainer').html('error!');
+                      }
+          });
+                  ajax.fail(function (jqXHr, textStatus, errorThrown) {
+                      $("#chartcontainer").html(jqXHr.responseText);
+                  });
+		          if (action=="submit_case") { toggle_login(); }
+		          $('#tweetcontainer').html('');
+		          return false;
+            }
 					else if (action=="delete_case")
 								{
 									if (!confirm("Are you sure you want to delete case "+case_id+" ?")) return;
@@ -388,6 +381,24 @@ if (!case_query) { alert('The case query cannot be blank'); return false; }
 						 	           });
 												 $('#tweetcontainer').html('');
 												 return true;
+								}
+					else if (action=="empty_case")
+								{
+									if (!confirm("Are you sure you want to empty case "+case_id+" ?")) return;
+						 	    $.ajax({url:'login.php?action=empty_case&case_id='+case_id+'&email='+email ,
+						 	            complete: function (response)
+						 	              {
+						 //									alert('url:'+url);
+						 								$('#chartcontainer').html(response.responseText);
+														toggle_login();
+						 	              },
+						 	            error: function ()
+						 								{
+						 									$('#chartcontainer').html('error!');
+						 								}
+						 	           });
+												 $('#tweetcontainer').html('');
+												 return false;
 								}
 					else if (action=="edit_case")
 								{
@@ -471,7 +482,7 @@ if (!case_query) { alert('The case query cannot be blank'); return false; }
 					var level=getSelectedValue('level');
 //					var minimum_followers=document.getElementById("minimum_followers").value;
 //					var url='fetch_tweeters.php?'+network+'=1&level='+level+'&minimum_followers='+minimum_followers+'&table='+table;
-					
+
 					var url='fetch_tweeters.php?'+getRadioValue(network)+'=1&level='+level+'&table='+table;
 				}
 			else
@@ -515,32 +526,59 @@ function showkumu()
 	    var e = document.getElementById("case");
 	    var case_id = e.options[e.selectedIndex].value;
 	    var url='tmp/kumu/'+case_id+'_users.csv';
-            $.ajax({type:'POST',url:url,
-                    complete: function (response)
-                      {
-			if (response.status == 200)		
-                         {   $('#kumu_users').html("<a href='"+url+"'>Tweeter CSV file for Kumu import</a>"); }
-                      },
-                    error: function () { $('#kumu_users').html("No Kumu tweeter data."); }
-                   });
-            var url1='tmp/kumu/'+case_id+'_responses.csv';
-            $.ajax({type:'POST',url:url1,
-                    complete: function (response)
-                      {
-                        if (response.status == 200)
-                          {  $('#kumu_responses').html("<a href='"+url1+"'>Response CSV file for Kumu import</a>"); }
-                      },
-                    error: function () { $('#kumu_responses').html("No Kumu response data.");}
-                   });
-            var url2='tmp/kumu/'+case_id+'_mentions.csv';
-            $.ajax({type:'POST',url:url2,
-                    complete: function (response)
-                      {
-                        if (response.status == 200)
-			  { $('#kumu_mentions').html("<a href='"+url2+"'>Mentions CSV file for Kumu import</a>");  }
-                      },
-                    error: function () { $('#kumu_mentions').html("No Kumu mention data.");}
-                   });
+      $.ajax({type:'POST',url:url,
+              complete: function (response)
+                {
+									if (response.status == 200)
+                   {   $('#kumu_users').html("<a href='"+url+"'>Tweeter CSV file</a>"); }
+                },
+              error: function () { $('#kumu_users').html("No Kumu tweeter data."); }
+             });
+      var url1='tmp/kumu/'+case_id+'_responses.csv';
+      $.ajax({type:'POST',url:url1,
+              complete: function (response)
+                {
+                  if (response.status == 200)
+                    {  $('#kumu_responses').html("<a href='"+url1+"'>Response CSV file</a>"); }
+                },
+              error: function () { $('#kumu_responses').html("No Kumu response data.");}
+             });
+      var url2='tmp/kumu/'+case_id+'_mentions.csv';
+      $.ajax({type:'POST',url:url2,
+              complete: function (response)
+                {
+                  if (response.status == 200)
+  									{ $('#kumu_mentions').html("<a href='"+url2+"'>Mentions CSV file</a>");  }
+                },
+              error: function () { $('#kumu_mentions').html("No Kumu mention data.");}
+             });
+			 var url3='tmp/kumu/'+case_id+'_top_tweets_10000.csv';
+       $.ajax({type:'POST',url:url3,
+               complete: function (response)
+                 {
+                   if (response.status == 200)
+	  									{ $('#kumu_top_10000').html("<a href='"+url3+"'>Top 10000 tweets CSV file</a>");  }
+                 },
+               error: function () { $('#kumu_top_10000').html("No Kumu top 10000 tweets data.");}
+              });
+			var url4='tmp/kumu/'+case_id+'_top_tweets_5000.csv';
+      $.ajax({type:'POST',url:url4,
+              complete: function (response)
+                {
+                  if (response.status == 200)
+  									{ $('#kumu_top_5000').html("<a href='"+url4+"'>Top 5000 CSV file for Kumu import</a>");  }
+                },
+              error: function () { $('#kumu_top_5000').html("No Kumu top 5000 tweets data.");}
+             });
+		 var url5='tmp/kumu/'+case_id+'_top_tweets_1000.csv';
+     $.ajax({type:'POST',url:url5,
+             complete: function (response)
+               {
+                 if (response.status == 200)
+  									{ $('#kumu_top_1000').html("<a href='"+url5+"'>Top 1000 CSV file for Kumu import</a>");  }
+               },
+             error: function () { $('#kumu_top_1000').html("No Kumu top 1000 tweets data.");}
+            });
 	  }
 
 	  function GetDetails(section,url)
@@ -557,3 +595,22 @@ function showkumu()
 	            error: function () {$('#'+section).html('error!');jQuery("#loading").hide(); }
 	           });
 	  }
+
+		function ValidateDateTime(field)
+				{
+					 var dtValue=document.getElementById(field).value.trim();
+					 var re = /^(\d{4}-\d{2}-\d{2})$/;
+					 if (dtValue.match(re))
+					 	{
+							dtValue=dtValue+" 00:00:00";
+							document.getElementById(field).value=dtValue;
+						}
+					 else {  }
+				   var dtRegex = new RegExp(/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01]) ([0-2][0-9]|):[0-5]\d:[0-5]\d$/);
+					 if (!dtRegex.test(dtValue) && dtValue.length>0)
+					 	{
+							$('.'+field).html("<br><b>The datetime value ("+dtValue+") is invalid.</b>");
+						}
+					else { $('.'+field).html(""); }
+
+				}

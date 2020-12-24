@@ -18,32 +18,21 @@ if ($result = $link->query($query))
         $last_process_updated=$row['last_process_updated'];
         $last_process_completed=$row['last_process_completed'];
         $platform=$row['platform'];
-        $search_method=$row['search_method'];
-	$pstatus=$row['status']; 
+	$pstatus=$row['status'];
      }
     if ($platform==1)
      {
-       if ($search_method==0)
-         {
-           $search_meth="api_search";
-         }
-      elseif ($search_method==1)
-         {
-           $search_meth="api_stream";
-         }
-      elseif ($search_method==2)
-         {
-           $search_meth="web_search";
-         }
+      $search_meth="api_search";
       $cmd='php '.$search_meth.'.php '.$_GET['id'].' >> tmp/log/'.$_GET['id'].'-'.$search_meth.'.log &';
      }
 
-//die("(s:".$last_process_started.",u:".$last_process_updated.",c:".$row['last_process_completed'].")"); 
+//die("(s:".$last_process_started.",u:".$last_process_updated.",c:".$row['last_process_completed'].")");
 
 if (!$_GET['progress'] && $table && !$_GET['stop'] && !$_GET['overlimit'])
   {
     kill_process(0);
-      $query="update cases set status='$status',last_process_started='".gmdate("Y-m-d H:i:s")."', last_process_updated='".gmdate("Y-m-d H:i:s")."' where id='${_GET['id']}'";
+      if ($status) $status="status='$status',";
+      $query="update cases set $status last_process_started='".gmdate("Y-m-d H:i:s")."', last_process_updated='".gmdate("Y-m-d H:i:s")."' where id='${_GET['id']}'";
       $result=$link->query($query);if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
 //die($cmd);
@@ -52,7 +41,7 @@ if (!$_GET['progress'] && $table && !$_GET['stop'] && !$_GET['overlimit'])
     echo "<HTML><HEAD><meta http-equiv=\"refresh\" content=\"0; URL='fetch_process.php?progress=1&id=".$_GET['id']."'\">";
     echo "</HEAD><BODY>The platform has just started the data extraction and database population process.<br>";
     echo "You can always track progress <a href='fetch_process.php?id=".$_GET['id']."&progress=1'>here</a> or from the case profile page.</BODY></HTML>";
-    exit; 
+    exit;
  }
 elseif ($_GET['progress'] && $table)
   {
@@ -81,15 +70,14 @@ if (!$_GET['overlimit'])
 //echo "($pstatus)";
     if ($pstatus2)
           {
-	    $status="<img src='images/in_progress.gif'> <font color=orange>In progress - <a href='fetch_process.php?id=$table&stop=1'>Stop</a></font>"; 
+	    $status="<img src='images/in_progress.gif'> <font color=orange>In progress - <a href='fetch_process.php?id=$table&stop=1'>Stop</a></font>";
 	    $html="<HTML><HEAD> $refresh $html";
-	    update_status("In progress");
           }
     else
           {
 	    if ($last_process_started!='0000-00-00 00:00:00' && $last_process_completed!='0000-00-00 00:00:00')
 		{
- 		 if ($pstatus=="overlimit") 
+ 		 if ($pstatus=="overlimit")
 		   { $status="<font color=green>Limit Exceeded</font>"; }
 		 else
 		   { $status="<font color=green>Completed (<a href='fetch_process.php?id=$table'>Process again</a>)</font>"; }
@@ -124,7 +112,7 @@ if (!$_GET['overlimit'])
       kill_process(1);
       $query="update cases set last_process_completed='0000-00-00 00:00:00',status='interrupted' where id='$table'";
       $result=$link->query($query);if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
-     exit; 
+     exit;
     }
   if (!$last_process_started) $last_process_started='N/A';
   if (!$last_process_updated) $last_process_updated='N/A';
@@ -138,8 +126,8 @@ if (!$_GET['overlimit'])
                       $html.="If you need help, feel free to contact us by email on <a href='mailto:admin@mecodify.org'>admin@mecodify.org</a></BODY></HTML>";
                     }
   echo $html;
-  echo "<table border=1><tr><td>Created</td><td>Status</td><td>Last process started</td><td>Last activity</td><td>Period covered</td><td>Records fetched</td><td>Detailed records fetched</td></tr>";
-    echo "<tr><td>$date_created</td><td>$status</td><td>$last_process_started</td><td>$last_process_updated</td><td>$period_covered</td><td>$step1</td><td>$step2</td></tr></table>";
+  echo "<table border=1><tr><td>Created</td><td>Status</td><td>Last process started</td><td>Last activity</td><td>Period covered</td><td>Records fetched</td></tr>";
+    echo "<tr><td>$date_created</td><td>$status</td><td>$last_process_started</td><td>$last_process_updated</td><td>$period_covered</td><td>$step1</td></tr></table>";
     echo "<br><br>You can always review the results of the extraction on <a href='$website_url'>the main page</a></BODY></HTML>";
 
   function time_elapsed_string($ptime)
@@ -191,14 +179,13 @@ function kill_process($verbose)
     $ret=shell_exec($str);
     if(!$ret) {
 //    if(posix_kill($ret,SIGKILL)) {
-            update_status('Stopped');
 	    if ($step2)
    	        echo "<HTML><HEAD><meta http-equiv=\"refresh\" content=\"0; URL='fetch_process.php?progress=1&id=".$_GET['id']."&overlimit=1'\">";
 	    else
                 echo "<HTML><HEAD><meta http-equiv=\"refresh\" content=\"0; URL='fetch_process.php?progress=1&id=".$_GET['id']."'\">";
     	    echo "</HEAD><BODY></BODY></HTML>";
     } else {
-         echo "The process does not seem to be running<br> <a href='fetch_process.php?id=".$_GET['id']."&progress=1'>Go back</a> \n"; 
+         echo "The process does not seem to be running<br> <a href='fetch_process.php?id=".$_GET['id']."&progress=1'>Go back</a> \n";
     }
   }
 function process_status($table)
@@ -224,7 +211,7 @@ function process_status($table)
 function update_status($status)
     {
       global $link;
-      $query="update cases set status='$status',last_process_updated='".gmdate("Y-m-d H:i:s")."',last_process_completed='0000-00-00 00:00:00' where id='${_GET['id']}'"; 
+      $query="update cases set status='$status',last_process_updated='".gmdate("Y-m-d H:i:s")."',last_process_completed='0000-00-00 00:00:00' where id='${_GET['id']}'";
       $result=$link->query($query);if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
     }
 ?>

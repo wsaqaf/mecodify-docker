@@ -25,7 +25,7 @@ echo $template;
 
 function get_cases_db($case)
   {
-      global $link; global $allow_new_cases; 
+      global $link; global $allow_new_cases;
 
       $cond="";
 
@@ -48,8 +48,8 @@ function get_cases_db($case)
 	  if ($case==$row['id']) $sel="SELECTED"; else $sel="";
           $is_yours=isyours($row['creator'],$_SESSION[basename(__DIR__).'email']);
           if ($is_yours=="*") $is_yours1=1; else $is_yours1=0;
-	  if (!$row['private'] || $is_yours1) 
-            { $list.="<option value='${row['id']}' id='${row['id']}' style='color:blacki; background-color:white' $sel>".tops($row['top_only'])."${row['name']}<sup>$is_yours</sup>"; }
+	  if (!$row['private'] || $is_yours1)
+            { $list.="<option value='${row['id']}' id='${row['id']}' style='color:blacki; background-color:white' $sel>${row['name']}<sup>$is_yours</sup>"; }
           $cnt++;
         }
       $list.="</select><br><i><font size=-1><a href='#' onclick=javascript:case_proc('more_info');>More info about the selected case</a></font></i><br>";
@@ -59,11 +59,6 @@ function get_cases_db($case)
       return $list;
   }
 
-function tops($top_only)
- {
-   if ($top_only) return "";
-   return "+ ";
- }
 function isyours($creator,$email)
     {
 	global $admin_email;

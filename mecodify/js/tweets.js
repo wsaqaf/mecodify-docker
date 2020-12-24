@@ -35,14 +35,6 @@ function showtip(field)
  			 });
   }
 
-function show_date()
-  {
-    var selectBox = document.getElementById("case_search_method");
-    var selectedValue = selectBox.options[selectBox.selectedIndex].value;
-    if (selectedValue=="2") { $('.datefield').show(); }
-     else { $('.datefield').hide(); }
-  }
-
 function hidetip(field) { $('.tip').html(''); }
 
 /*
@@ -261,7 +253,7 @@ function getRandomInt (min, max) {
 										},
 									error: function ()
 		 								{
-											alert('error!');
+//											alert('error!');
 											$('#chartcontainer').html('error!');
 		 								}
 	  				});
@@ -273,9 +265,9 @@ function getRandomInt (min, max) {
 					var email=document.getElementById("email").value;
 					var password=document.getElementById("password").value;
 					var ajax = $.ajax({
-type: 'POST', 
+type: 'POST',
 url: 'login.php',
-ContentType : 'application/json',								
+ContentType : 'application/json',
 data: { 'action': 'login', 'email': email, 'password': password},
     							complete: function(response)
 										{
@@ -319,43 +311,46 @@ if (!(response.responseText.startsWith('Incorrect'))) { location.reload(); }
 				else if (action=="submit_case" || action=="resubmit_case")
 					{
 						var case_id=document.getElementById("case_id").value;
-if( /[^a-zA-Z0-9_]/.test(case_id) ) {
-       alert('The case ID has to be alphanumeric (only alphabets or numbers and no space)');
-       return false;
-    }
+						if( /[^a-zA-Z0-9_]/.test(case_id) ) {
+						       alert('The case ID has to be alphanumeric (only alphabets or numbers and no space)');
+						       return false;
+						    }
 						var case_name=document.getElementById("case_name").value;
-if (!case_name) { alert('The case name cannot be blank'); return false; }
+						if (!case_name) { alert('The case name cannot be blank'); return false; }
 						var case_platform=document.getElementById("case_platform").value;
-                                                var case_search_method=document.getElementById("case_search_method").value;
+						var case_include_retweets=getBoxValue("case_include_retweets");
+						if (case_include_retweets=="on") case_include_retweets=1; else case_include_retweets=0;
 						var case_top_only=getBoxValue("case_top_only");
 						if (case_top_only=="on") case_top_only=1; else case_top_only=0;
 						var case_query=document.getElementById("case_query").value;
-if (!case_query) { alert('The case query cannot be blank'); return false; }
+						if (!case_query) { alert('The case query cannot be blank'); return false; }
 						var case_from=document.getElementById("case_from").value;
 						var case_to=document.getElementById("case_to").value;
 						var case_details=document.getElementById("case_details").value;
 						var case_details_url=document.getElementById("case_details_url").value;
-                                                var case_flags=document.getElementById("case_flags").value;
+            var case_flags=document.getElementById("case_flags").value;
 						var case_private=document.getElementById("case_private").value;
 						var email=document.getElementById("email").value;
 						var ajax = $.ajax({type: 'POST', url: 'login.php',
-										data: { action: action, email: email, case_id: case_id, case_name: case_name, case_platform: case_platform, case_search_method: case_search_method,
-																		case_top_only: case_top_only, case_query: case_query, case_from: case_from, case_to: case_to,
+										data: { action: action, email: email, case_id: case_id, case_name: case_name, case_platform: case_platform,
+																		case_include_retweets: case_include_retweets, case_top_only: case_top_only, case_query: case_query, case_from: case_from, case_to: case_to,
 																		case_details: case_details, case_details_url: case_details_url, case_flags: case_flags, case_private: case_private},
 	    							complete: function(response)
 											{
-	//											alert('success!');
+//												alert('success!');
 		    								$( "#chartcontainer").html(response.responseText);
 											},
 										error: function ()
 			 								{
-	//											alert('error!');
+//												alert('error!');
 												$('#chartcontainer').html('error!');
 			 								}
 		  				});
 							ajax.fail(function (jqXHr, textStatus, errorThrown) {
+//alert("failed!");
 							    $("#chartcontainer").html(jqXHr.responseText);
 							});
+//alert("got_in!");
 						if (action=="submit_case") { toggle_login(); }
 						$('#tweetcontainer').html('');
 						return false;
@@ -364,6 +359,24 @@ if (!case_query) { alert('The case query cannot be blank'); return false; }
 						{
 							if (!confirm("Are you sure you want to delete case "+case_id+" ?")) return;
 				 	    $.ajax({url:'login.php?action=delete_case&case_id='+case_id+'&email='+email ,
+				 	            complete: function (response)
+				 	              {
+				 //									alert('url:'+url);
+				 								$('#chartcontainer').html(response.responseText);
+												toggle_login();
+				 	              },
+				 	            error: function ()
+				 								{
+				 									$('#chartcontainer').html('error!');
+				 								}
+				 	           });
+										 $('#tweetcontainer').html('');
+										 return false;
+						}
+			else if (action=="empty_case")
+						{
+							if (!confirm("Are you sure you want to empty case "+case_id+" ?")) return;
+				 	    $.ajax({url:'login.php?action=empty_case&case_id='+case_id+'&email='+email ,
 				 	            complete: function (response)
 				 	              {
 				 //									alert('url:'+url);
@@ -498,6 +511,9 @@ if (!case_query) { alert('The case query cannot be blank'); return false; }
 	// Original JavaScript code by Chirp Internet: www.chirp.com.au
 	// Please acknowledge use of this code by including this header.
 
+	// Original JavaScript code by Chirp Internet: www.chirp.com.au
+	// Please acknowledge use of this code by including this header.
+
 		   function checkDate(field)
 		   {
 		     var minYear = 1902;
@@ -523,9 +539,6 @@ if (!case_query) { alert('The case query cannot be blank'); return false; }
 		     }
 		     return errorMsg;
 		   }
-
-	// Original JavaScript code by Chirp Internet: www.chirp.com.au
-	// Please acknowledge use of this code by including this header.
 
 	function checkTime(field)
 	{
@@ -560,50 +573,50 @@ if (!case_query) { alert('The case query cannot be blank'); return false; }
 		  var elements2 = elements.length ? elements : [elements];
 		  for (var index = 0; index < elements2.length; index++) {
 		    elements2[index].style.display = visible;
-		    if (elements.id=="specify_types" && visible=="none") 
+		    if (elements.id=="specify_types" && visible=="none")
 			{
 			 document.getElementById("image_tweets").checked=false;
-                         document.getElementById("video_tweets").checked=false;
-                         document.getElementById("link_tweets").checked=false;
-                         document.getElementById("user_verified").checked=false;
-                         document.getElementById("retweet_tweets").checked=false;
-                         document.getElementById("response_tweets").checked=false;
-                         document.getElementById("responded_tweets").checked=false;
-                         document.getElementById("quoting_tweets").checked=false;
-                         document.getElementById("mentions_tweets").checked=false;
-                         document.getElementById("any_hashtags").value="";
-                         document.getElementById("any_keywords").value="";
-                         document.getElementById("all_keywords").value="";
-                         document.getElementById("exact_phrase").value="";
-                         document.getElementById("from_accounts").value="";
-                         document.getElementById("in_reply_to_tweet_id").value="";
-                         document.getElementById("location").value="";
-                         document.getElementById("min_retweets").value="";
-			}
-                    if (elements.id=="specify_period" && visible=="none")
-                        {
-                         document.getElementById("startdate").value="";
-                         document.getElementById("starttime").value="";
-                         document.getElementById("enddate").value="";
-                         document.getElementById("endtime").value="";
-			}		   
-                    if (elements.id=="specify_lang" && visible=="none")
-                        {
-                         document.getElementById("language").value="";
-                        }
-                    if (elements.id=="specify_client" && visible=="none")
-                        {
-                         document.getElementById("web_client").checked=false;
-                         document.getElementById("android").checked=false;
-                         document.getElementById("iphone").checked=false;
-                         document.getElementById("mobile_web").checked=false;
-                         document.getElementById("tweetdeck").checked=false;
-                         document.getElementById("blackberry").checked=false;
-                         document.getElementById("ipad").checked=false;
-                         document.getElementById("twitter_for_websites").checked=false;
-                         document.getElementById("facebook").checked=false;
-                         document.getElementById("tweetcaster_for_android").checked=false;
-                         document.getElementById("other_source").value="";
+       document.getElementById("video_tweets").checked=false;
+       document.getElementById("link_tweets").checked=false;
+       document.getElementById("user_verified").checked=false;
+       document.getElementById("retweet_tweets").checked=false;
+       document.getElementById("response_tweets").checked=false;
+       document.getElementById("responded_tweets").checked=false;
+       document.getElementById("quoting_tweets").checked=false;
+       document.getElementById("mentions_tweets").checked=false;
+       document.getElementById("any_hashtags").value="";
+       document.getElementById("any_keywords").value="";
+       document.getElementById("all_keywords").value="";
+       document.getElementById("exact_phrase").value="";
+       document.getElementById("from_accounts").value="";
+       document.getElementById("in_reply_to_tweet_id").value="";
+       document.getElementById("location").value="";
+       document.getElementById("min_retweets").value="";
+}
+  if (elements.id=="specify_period" && visible=="none")
+      {
+       document.getElementById("startdate").value="";
+       document.getElementById("starttime").value="";
+       document.getElementById("enddate").value="";
+       document.getElementById("endtime").value="";
+}
+  if (elements.id=="specify_lang" && visible=="none")
+      {
+       document.getElementById("language").value="";
+      }
+  if (elements.id=="specify_client" && visible=="none")
+      {
+       document.getElementById("web_client").checked=false;
+       document.getElementById("android").checked=false;
+       document.getElementById("iphone").checked=false;
+       document.getElementById("mobile_web").checked=false;
+       document.getElementById("tweetdeck").checked=false;
+       document.getElementById("blackberry").checked=false;
+       document.getElementById("ipad").checked=false;
+       document.getElementById("twitter_for_websites").checked=false;
+       document.getElementById("facebook").checked=false;
+       document.getElementById("tweetcaster_for_android").checked=false;
+       document.getElementById("other_source").value="";
 			}
 		  }
 		}
@@ -706,7 +719,7 @@ function showkumu()
 	 		 alert(sel.options[sel.selectedIndex].value);
 	 	  }
 
-	  function visualize()
+	  function visualize(refresh="")
 	 		  {
 //	 				toggle_login(1);
 	 				var qry=[];
@@ -716,9 +729,9 @@ function showkumu()
 					var temp_bool=document.getElementById("bool_op");
 					qry['bool_op']=temp_bool.options[temp_bool.selectedIndex].value;
 	 				var e = document.getElementById("time_unit");
+
 	 				try
 	 				{
-
 	 						qry['drill_level'] = e.options[e.selectedIndex].value;
 	 						qry['startdate']=document.getElementById("startdate").value;
 	 						qry['starttime']=document.getElementById("starttime").value;
@@ -744,8 +757,8 @@ function showkumu()
 	 						qry['link_tweets']=getBoxValue("link_tweets");
 	 						qry['retweet_tweets']=getBoxValue("retweet_tweets");
 	 						qry['response_tweets']=getBoxValue("response_tweets");
-                                                        qry['quoting_tweets']=getBoxValue("quoting_tweets");
-                                                        qry['mentions_tweets']=getBoxValue("mentions_tweets");
+              qry['quoting_tweets']=getBoxValue("quoting_tweets");
+              qry['mentions_tweets']=getBoxValue("mentions_tweets");
 	 						qry['responded_tweets']=getBoxValue("responded_tweets");
 							var ht=document.getElementById("any_hashtags").value.toLowerCase();
 							ht = ht.replace(/#/,' ');
@@ -793,8 +806,7 @@ function showkumu()
 	 									}
 	 							}
 	 						else if (qry['sources']!='only_mobile' && qry['sources']!='only_web') { qry['sources']=""; }
-	 				 } catch (e) { }
-//qry['languages']="";qry['sources']="";
+	 				 } catch (e) { /*alert("error:"+e.message);*/ }
 
 	 				var url='fetch_tweets.php?demo=1';
 	 				for(var key in qry)
@@ -817,7 +829,7 @@ function showkumu()
 	 										{
 	 											$('#tweetcontainer').html('');
 	 											$("#loadingtweets").show();
-	 											$.ajax({url:url+'&point=1&asc=1&order_d=1',
+	 											$.ajax({url:url+'&point=1&asc=1&order_d=1&refresh='+refresh,
 	 															complete: function (response)
 	 																{
 	 																		$('#tweetcontainer').html(response.responseText);
@@ -832,3 +844,24 @@ function showkumu()
 	 							 });
 	 				return true;
 	 		  }
+
+function ValidateDateTime(field)
+		{
+			 var dtValue=document.getElementById(field).value.trim();
+			 var re = /^(\d{4}-\d{2}-\d{2})$/;
+			 if (dtValue.match(re))
+			 	{
+					dtValue=dtValue+" 00:00:00";
+					document.getElementById(field).value=dtValue;
+					if (field=="case_from") { document.login.case_from.value=dtValue; }
+					if (field=="case_to") { document.login.case_to.value=dtValue; }
+				}
+			 else {  }
+		   var dtRegex = new RegExp(/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01]) ([0-2][0-9]|):[0-5]\d:[0-5]\d$/);
+			 if (!dtRegex.test(dtValue) && dtValue.length>0)
+			 	{
+					$('.'+field).html("<br><b>The datetime value ("+dtValue+") is invalid.</b>");
+				}
+			else { $('.'+field).html(""); }
+
+		}

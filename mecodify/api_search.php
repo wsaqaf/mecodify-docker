@@ -1,30 +1,25 @@
 <?php
-//draw_network($table);
-//exit;
-//error_reporting(E_ALL);
-error_reporting(E_ERROR);
+error_reporting(E_ALL);
+require_once("configurations.php");
+require_once("cloud.php");
+
 ini_set('max_execution_time', -1);
 ini_set('max_input_time', -1);
 ini_set('memory_limit', '1024M');
 date_default_timezone_set('UTC');
 
-require_once("configurations.php");
-require_once("cloud.php");
 
 //example: egypt 1 2011-09-25ß
+
+if (!isset($argv[1])) $argv[1]=null;
 
 if (!$argv[1]) die("Missing case...\n\n");
 
 $table=$argv[1];
 $from=$argv[2];
 $to=$argv[3];
-$top_only=$argv[4];
+$include_associated=$argv[4];
 $starting_point=$argv[5];
-$step1=1; $step2=1; $step3=1; $step4=1;
-if ($from=="step1") { $step1=1; $step2=0; $step3=0; $step4=0; $from=''; $to=''; }
-if ($from=="step2") { $step1=0; $step2=1; $step3=0; $step4=0; $from=''; $to=''; }
-if ($from=="step3") { $step1=0; $step2=0; $step3=1; $step4=0; $from=''; $to=''; }
-if ($from=="step4") { $step1=0; $step2=0; $step3=0; $step4=1; $from=''; $to=''; }
 $top_limit=array(1000,5000,10000);
 
 $verbose=1;
@@ -33,7 +28,7 @@ $use_api=0;
 $global_step=0;
 $last_tweet_id="";
 $max_list=1000000;
-$max_per_page=1000;
+$max_per_page=100;
 $global_step_limit=100;
 $start_from=1;
 $track_stream=1;
@@ -42,177 +37,105 @@ $started=false;
 $step=0;
 $failed_proxy=0;
 $hash_cloud="";
+$next_token="start";
+$since_id="";
+$until_id="";
+
+$added_users_list=array();
+$added_tweets_list=array();
+
+$limit_remaining=300;
+$limit_reset=1000000000;
+$full_header="";
+$fresh_start=true;
+
+$retweet_keys=array("clear_text","raw_text","has_image","has_video","media_link","has_link","urls","expanded_links","context_annotations","tweet_language","hashtags","user_mentions");
 
 //note("\nhi!\n");
 
- update_cases_table("started");
+array_map('unlink', glob("tmp/cache/$table*.tab"));
+array_map('unlink', glob("tmp/cache/$table*.htm*"));
+$keywords=rawurlencode($cases[$table]['query']);
+//$keywords=$cases[$table]['query'];
 
-if ($step1)
-  {
-    array_map('unlink', glob("tmp/cache/$table*.tab"));
-    array_map('unlink', glob("tmp/cache/$table*.htm*"));
-    $keywords=$cases[$table]['query'];
-//    $keywords=urlencode($cases[$table]['query']);
-
-    $mode="INSERT IGNORE"; if ($overwrite) $mode="REPLACE";
+$mode="INSERT IGNORE"; if ($overwrite) $mode="REPLACE";
 
 //$type=""; //top tweets
-    if ($mode=="log") $log=1; else $log=0;
-    if ($starting_point=="purge") $resume=0; else $resume=1;
-    $log=0;
+if ($mode=="log") $log=1; else $log=0;
+if ($starting_point=="purge") $resume=0; else $resume=1;
+$log=0;
 
-    //echo "to: $to , real to:".$cases[$table]['to']."\n";
-    //echo "from: $from , real from:".$cases[$table]['from']."\n";
+$start_time=$cases[$table]['from'];
+if ($start_time=="0000-00-00 00:00:00") $start_time="";
+else $start_time = str_replace(" ", "T",$cases[$table]['from']).".00Z";
 
-    $dates=array();
-    $c=0;
+$end_time=$cases[$table]['to'];
+if ($end_time=="0000-00-00 00:00:00") $end_time="";
+else $end_time = str_replace(" ", "T",$cases[$table]['to']).".00Z";
 
-    if ($cases[$table]['to']=='0000-00-00')
-     {
-       $datetime = new DateTime(null, new DateTimeZone('UTC'));
-       $cases[$table]['to']=$datetime->format('Y-m-d');
-     }
-    if ($cases[$table]['from']=='0000-00-00')
-     {
-       $datetime = new DateTime(null, new DateTimeZone('UTC'));
-       $datetime->modify('-7 days');
-       $cases[$table]['to']=$datetime->format('Y-m-d');
-     }
-    if (!$argv[4]) $top_only=$cases[$table]['top_only'];
+$include_retweets=$cases[$table]['include_retweets'];
 
-    if (!$top_only)
-     {
-      $wait_one_more=0;
-      $type="recent"; //all tweets
-     }
-    else
-     {
-      $type="popular"; //top tweets only
-      $wait_one_more=1;
-     }
-    get_tweet_ids($type, $table,$keywords);
-    tweeter_data($table);
-   }
-if ($step2)
-        {
-          get_other_fields($table,'?q='.$keywords.'&count=100&tweet_mode=extended&result_type='.$type.$max_id);
-          if ($step1)
-           {
+if (!$argv[4]) $include_associated=$cases[$table]['top_only'];
+
+$dates=array();
+$c=0;
+
+if (!$include_retweets) { $keywords=($keywords)."%20-is:retweet%20-is:quote"; }
+#if (!$include_associated) { $keywords=($keywords)."%20-filter:replies"; }
+
+get_tweet_ids($table,$keywords);
+tweeter_data($table);
+
 $query= "SELECT hashtags FROM $table where hashtags is not null";
-    if ($result = $link->query($query))
-        {
-          if (!$result->num_rows) { echo "No hashtags in the database matched your query.<br>\n";  }
-          $total=$result->num_rows;
-        }
-    else { echo "Error in query: ". $link->error.": $query... Skipping\n\n"; exit; }
+if ($result = $link->query($query))
+    {
+      if (!$result->num_rows) { echo "No hashtags in the database matched your query.<br>\n";  }
+      $total=$result->num_rows;
+    }
+else { echo "Error in query: ". $link->error.": $query... Skipping\n\n"; exit; }
 while ($row=$result->fetch_assoc())
   {
      $hash_cloud=$hash_cloud." ".$row['hashtags'];
   }
-	    file_put_contents("tmp/cache/$table-hashcloud.html","<html><meta http-equiv='content-type' content='text/html; charset=utf-8' />\n$hash_cloud</html>");
-            $cloud = new PTagCloud(100);
-            $cloud->addTagsFromText($hash_cloud);
-            $cloud->setWidth("900px");
-            $temp=$link->real_escape_string($cloud->emitCloud());
-            $query= "UPDATE cases SET hashtag_cloud='$temp' where id='$table'";
-            if ($result = $link->query($query)) echo "updated $table\n";
-            else { echo "Error in query: ". $link->error.": $query... Skipping\n\n"; exit; }
-           }
-          tweeter_data($table);
-        }
-
-if ($step4)
-	{
-	  $query= "SELECT hashtags FROM $table where hashtags is not null";
-	  if ($result = $link->query($query))
-           {
-            if (!$result->num_rows) { echo "No hashtags in the database matched your query.<br>\n";  }
-            $total=$result->num_rows;
-           }
-          else { echo "Error in query: ". $link->error.": $query... Skipping\n\n"; exit; }
-	  while ($row=$result->fetch_assoc())
-	    {
-     	      $hash_cloud=$hash_cloud." ".$row['hashtags'];
-	    }
-            file_put_contents("tmp/cache/$table-hashcloud.html","<html><meta http-equiv='content-type' content='text/html; charset=utf-8' />\n$hash_cloud</html>");
-          $cloud = new PTagCloud(100);
-          $cloud->addTagsFromText($hash_cloud);
-          $cloud->setWidth("900px");
-          $temp=$link->real_escape_string($cloud->emitCloud());
-          $query= "UPDATE cases SET hashtag_cloud='$temp' where id='$table'";
-          if ($result = $link->query($query)) echo "updated $table\n";
-          else { echo "Error in query: ". $link->error.": $query... Skipping\n\n"; exit; }
-          tweeter_data($table);
-	  exit();
-
-	}
+file_put_contents("tmp/cache/$table-hashcloud.html","<html><meta http-equiv='content-type' content='text/html; charset=utf-8' />\n$hash_cloud</html>\n");
+$cloud = new PTagCloud(100);
+$cloud->addTagsFromText($hash_cloud);
+$cloud->setWidth("900px");
+$temp=$link->real_escape_string($cloud->emitCloud());
+$query= "UPDATE cases SET hashtag_cloud='$temp' where id='$table'";
+if ($result = $link->query($query)) echo "updated $table\n";
+else { echo "Error in query: ". $link->error.": $query... Skipping\n\n"; exit; }
 
 $link->close();
 
-function get_tweet_ids($type, $table,$keywords)
+function get_tweet_ids($table,$keywords)
   {
-    global $link; global $mode; global $mysql_db; global $i; global $step2; global $wait_one_more;
+    global $link; global $mode; global $mysql_db; global $i; global $step2;
     global $global_step;  global $oldest_tweet_id; global $last_tweet_id;  global $max_list;
-    global $list_count; global $start_from; global $added; global $skipped; global $top_only;
-    global $global_step_limit; global $max_per_page; global $count_total;
-
-//    echo "$table, keywords: ($keywords)\n";
-
-//    $specific_period="%20since%3A".$from."%20until%3A".$to;
-    $query= "SELECT tweet_id,date_time from $table order by tweet_id ASC";
-    if ($result = $link->query($query)) { if (!($result->num_rows)) $oldest_tweet_id=""; }
-    else die("Error in query: ". $link->error.": $query");
-    $row = $result->fetch_assoc();
-    $oldest_tweet_id=$row['tweet_id'];
-    $oldest_tweet_time=$row['date_time'];
-
-    if ($oldest_tweet_id)
-      {
-        $max_id="&max_id=$oldest_tweet_id";
-        note("Getting tweets before $oldest_tweet_id at ".$oldest_tweet_time."\n");
-      }
-    else
-      {
-        $max_id=""; 
-        note("Starting new...\n");
-      }
+    global $list_count; global $start_from; global $added; global $skipped; global $include_associated;
+    global $global_step_limit; global $max_per_page; global $count_total; global $next_token;
 
     $tweets_done=0;
     $count_total=0;
-    while (true)
-     {
-          $processed=get_other_fields($table,'?q='.$keywords.'&count=100&tweet_mode=extended&result_type='.$type.$max_id);
-          if (!$processed) break;
-          $max_id="&max_id=$oldest_tweet_id";
-          $tweets_done=$tweets_done+$processed;
-     }
-/*
-     $query= "SELECT tweet_id from $table order by tweet_id";
-     if ($result = $link->query($query)) { if (!($result->num_rows)) $first_tweet_id=""; }
-     else die("Error in query: ". $link->error.": $query");
-     $row = $result->fetch_assoc();
-     $first_tweet_id=$row['tweet_id'];
-     $first_tweet_time=$row['date_time'];
 
-     if ($first_tweet_id)
-       {
-         $max_id="&max_id=$first_tweet_id";
-         note("Going back from $first_tweet_id at ".$first_tweet_time."\n");
-       }
-     else
-       {
-         $max_id=""; 
-         note("Starting new...\n");
-       }
-*/
-     while (true)
+    $pg=0;
+    while ($next_token)
+     {
+        if ($next_token=="start") $next_token="";
+
+note("Starting page $pg\n");
+        $processed=get_other_fields($table,$keywords);
+        $pg++;
+//    if (!$processed) break;
+//    $max_id="&max_id=$oldest_tweet_id";
+//    $tweets_done=$tweets_done+$processed;
+//die("debug 3 - exiting");
+     }
+    if (!$tweets_done)
       {
-           $processed=get_other_fields($table,'?q='.$keywords.'&count=100&tweet_mode=extended&result_type='.$type.$max_id);
-           if (!$processed) break;
-           $max_id="&max_id=$oldest_tweet_id";
-           $tweets_done=$tweets_done+$processed;
+          note("No more tweets found, exiting...\n");
+          update_cases_table("completed"); /*exit;*/
       }
-    if (!$tweets_done) { note("No tweets found, exiting...\n"); update_cases_table("completed"); /*exit;*/ }
     note("Processed total of $tweets_done tweets\n");
   }
 
@@ -220,400 +143,335 @@ function get_other_fields($table,$getfield)
   {
     global $link; global $mysql_db; global $j; global $twitter_api_settings; global $last_setting;
     global $oldest_tweet_id; global $last_tweet_id; global $count_total;
+    global $added_users; global $next_token;
 
     $last_setting=rand(0,sizeof($twitter_api_settings)-1);
 
     $regex = '$\b(https?|ftp|file)://[-A-Z0-9+&@#/%?=~_|!:,.;]*[-A-Z0-9+&@#/%=~_|]$i';
-echo "Get field: $getfield\n";
-          $response=getapi_record($getfield);
-          $recs=json_decode($response);
-//print_r($recs);
-          $records=$recs->statuses;
-//print_r($records);
-//exit;
-          if (!sizeof($records)) { note("no more tweets\n"); return 0; }
-//print_r($records);
-          $i=0;
-          foreach($records as $record)
-            {
-              if ($i==0) $last_tweet_id=$record->id;
-              extract_and_store_data($record);
-              note($record->id." ");
-              $oldest_tweet_id=$record->id;
-              $i++;
-	      $count_total++;
-   	      if ($count_total==100000) { tweeter_data($table); $count_total=0; }
-           }
-          if ($oldest_tweet_id==$last_tweet_id)
-            {
-              return 0;
-            }
-          note("\nProcessed $i records ($oldest_tweet_id - $last_tweet_id) in $table\n");// for ($tweet_updated_rows tweets, $user_updated_rows users updated)\n";
-          return $i;
+
+    $recs=getapi_record($getfield);
+
+    $records=$recs->data;
+
+    if (!sizeof($records))
+      {
+        note("no more tweets\n");
+        return 0;
+      }
+
+    $i=0;
+    $added_users=false;
+
+    $oldest_tweet_id="";
+    foreach($records as $record)
+      {
+        if (!$oldest_tweet_id) $oldest_tweet_id=$record->id;
+        if (isset($record->id))
+          {
+            note("Doing #: $i with id [".$record->id."]\n");
+          }
+        else { note("Tweet object id missing!\n"); continue; }
+
+        extract_and_store_data($record,$recs,true);
+        $i++;
+        $count_total++;
+        if ($count_total==100000) { tweeter_data($table); $count_total=0; }
+        $last_tweet_id=$record->id;
+      }
+    note("\nProcessed $i records ($oldest_tweet_id - $last_tweet_id) in $table\n");// for ($tweet_updated_rows tweets, $user_updated_rows users updated)\n";
+    if (isset($recs->meta->next_token)) $next_token="&next_token=".$recs->meta->next_token;
+    else $next_token="";
+
+    return $i;
   }
 
+function add_user($u)
+ {
+      global $added_users_list;
+
+      if (in_array($u->id, $added_users_list)) return;
+
+      $user=array();
+      if ($u->id) $user['user_id']=$u->id;
+      if ($u->username) $user['user_screen_name']=$u->username;
+      if ($u->name) $user['user_name']=$u->name;
+      if ($u->location) $user['user_location']=$u->location;
+      if (isset($u->public_metrics->followers_count)) $user['user_followers']=$u->public_metrics->followers_count;
+      if (isset($u->public_metrics->following_count)) $user['user_following']=$u->public_metrics->following_count;
+      if (isset($u->public_metrics->tweet_count)) $user['user_tweets']=$u->public_metrics->tweet_count;
+      if (isset($u->public_metrics->listed_count)) $user['user_lists']=$u->public_metrics->listed_count;
+      if ($u->protected) $user['user_protected']=$u->protected; else  $user['user_protected']=0;
+      $user['user_created']=str_replace("T"," ",substr($u->created_at,0,19));
+      if ($u->geo_enabled) $user['user_geo_enabled']=1; else $user['user_geo_enabled']=0;
+      if ($u->verified) $user['user_verified']=$u->verified; else $user['user_verified']=0;
+      if ($u->description) $user['user_bio']=$u->description;
+      if ($u->profile_image_url) $user['user_image_url']=str_replace("_400x400.jpg","_200x200.jpg", str_replace("_normal.jpg","_200x200.jpg",$u->profile_image_url));
+      if ($u->entities)
+       {
+         if ($u->entities->url->urls)
+          {
+            if (sizeof($u->entities->url->urls)>0)
+            {
+              foreach($u->entities->url->urls as $url)
+               {
+                    $user['user_url']=$user['user_url']." ".$url->expanded_url;
+               }
+              $user['user_url']=trim($user['user_url']);
+            }
+          }
+       }
+      if (!isset($user['user_url']))
+        {
+          if (isset($u->url)) $user['user_url']=$u->url;
+          else $user['user_url']="https://twitter.com/".$user['user_screen_name'];
+        }
+      /******resume twitter data******/
+      if ($u)
+        {
+          put_user_in_database($user);
+          $added_users_list[]=$u->id;
+        }
+      else
+        {
+          echo "No user found: ".$user['user_screen_name']."\n";
+          sleep(2);
+        }
+}
+
 function tweeter_data($table)
- {  
+ {
     update_response_mentions();
-    clean_data($table);
     draw_network($table);
  }
 
-function clean_data($table)
-{
-  $started=false; global $k; global $link;
-
-  $query="SELECT user_screen_name FROM `users_"."$table` WHERE is_deleted is null and is_suspended is null and user_name is null and restricted_to_public is null and user_screen_name in (select user_screen_name from $table where is_protected_or_deleted=1)";
-  //echo "\n$query\n"; exit;
-  if ($result = $link->query($query))
-    {
-      if (!$result->num_rows) return "No data found in DB\n";
-      $total=$result->num_rows;
-    }
-  if ($total<100) $max_list=$total; else $max_list=100;
-
-  echo "Total of $total records to process for $table\n";
-  //exit;
-  $last_rec=0; $new_rec=0; //$tweet_updated_rows=0; $user_updated_rows=0;
-  $k=0;
-
-  while (true)
+function extract_and_store_data($tweet,$parent,$save_to_db)
   {
-    $k++;
-    $new_rec++;
-    $row = $result->fetch_assoc();
-  // print_r($row); exit;
-    if ($row)
-      {
-        foreach($row as $screen_name)
-          {
-            if ($k==1) $records=$screen_name;
-            else $records="$records,".$screen_name;
-          }
-      }
-  // else { echo "No more records in DB\n"; exit; }
+    global $table; global $regex; global $cases; global $link; global $include_associated; global $retweet_keys;
+    global $hash_cloud; global $from; global $to; global $added_users; global $added_tweets; global $include_retweets;
 
-  //echo $records; continue;
-   if (!$row || $k==$max_list)
-    {
-  //echo "\n$i: $records\n"; exit;
-      $getfields= array('screen_name' => $records);
-      $response=getapi_record2($getfield);
-      if (!$response)
+    if (in_array($tweet->id, $added_tweets_list)) return;
+
+    if (startsWith($tweet->text,"RT @") && !$include_retweets) return;
+
+    $tw=array();
+    $user=array();
+    $tw['tweet_id']=$tweet->id;
+    if (isset($tweet->created_at))
+      {
+        $tw['date_time']=str_replace("T"," ",substr($tweet->created_at,0,19));
+        $tw['tweet_date']=date('Y-m-d',strtotime($tw['date_time']));
+      }
+    if (isset($tweet->source))
+      {
+        $tw['full_source']=$tweet->source;
+        $tw['source']=preg_replace('/.+>([^<>]+?)<.+/','$1',$tweet->source);
+      }
+    if (isset($tweet->text)) $tw['raw_text']=$tweet->text;
+    if (isset($tweet->lang)) $tw['tweet_language']=$tweet->lang;
+    if (isset($tweet->author_id)) $tw['user_id']=$tweet->author_id;
+    if (isset($tweet->conversation_id)) $tw['conversation_id']=$tweet->conversation_id;
+    if (isset($tweet->context_annotations)) $tw['context_annotations']=$tweet->context_annotations;
+    if (isset($tweet->possibly_sensitive)) $tw['possibly_sensitive']=$tweet->possibly_sensitive;
+    if (isset($tweet->in_reply_to_user_id)) $tw['in_reply_to_user']=$tweet->in_reply_to_user_id;
+    if (isset($tweet->public_metrics->retweet_count)) $tw['retweets']=$tweet->public_metrics->retweet_count;
+    if (isset($tweet->public_metrics->quote_count)) $tw['quotes']=($tweet->public_metrics->quote_count);
+    if (isset($tweet->public_metrics->like_count)) $tw['favorites']=$tweet->public_metrics->like_count;
+    if (isset($tweet->public_metrics->reply_count)) $tw['replies']=$tweet->public_metrics->reply_count;
+
+    if (isset($tweet->referenced_tweets))
+     {
+       foreach ($tweet->referenced_tweets as $rtw)
         {
-          echo "No more records...\n";
-          return;
-        }
-  //echo "\n($response)\n"; exit;
-     else
-       {
-        $record=json_decode($response);
-    //print_r($record); exit;
-    //    $records=$record->screen_name;
-    //    print_r($records); exit;
-    //    $r=get_object_vars($records);
-    //    $keys=array_keys($r);
-    //print_r($r); exit;
-    //  foreach($records as $tweet)
-        foreach($record as $usr)
+		      switch($rtw->type)
+            {
+      			  case "retweeted":
+      				$tw['is_retweet']=1;
+              $tw['retweeted_tweet_id']=$rtw->id;
+              $tw['retweets']=0;
+              if (isset($parent->includes->tweets))
+                {
+          				foreach ($parent->includes->tweets as $subt)
+          				  {
+          				    if ($subt->id == $rtw->id)
+              					{
+              					  $tmp_tw=extract_and_store_data($subt,$parent,$include_associated);
+                          foreach ($retweet_keys as $rk) { $tw[$rk]=$tmp_tw[$rk]; }
+                          $tw['retweeted_user_id']=$tmp_tw['user_id'];
+                          $tw['clear_text']="RT ".$tw['clear_text'];
+                          $tw['raw_text']="RT ".$tw['raw_text'];
+              					  break;
+              					}
+                      else extract_and_store_data($subt,$parent,$include_associated);
+          				  }
+                }
+              else
+                {
+                  die("Included tweets missing, exiting...\n");
+                }
+      				continue 2;
+              case "quoted":
+                $tw['is_quote']=1;
+                $tw['quoted_tweet_id']=$rtw->id;
+                foreach ($parent->includes->tweets as $subt)
+                  {
+                    if ($subt->id == $rtw->id)
+                        {
+                          $tmp_tw=extract_and_store_data($subt,$parent,$include_associated);
+                          $tw['retweeted_user_id']=$tmp_tw['user_id'];
+                          break;
+                        }
+                  }
+              continue 2;
+              case "replied_to":
+                $tw['is_reply']=1;
+                $tw['in_reply_to_tweet']=$rtw->id;
+                foreach ($parent->includes->tweets as $subt)
+                  {
+                    if ($subt->id == $rtw->id)
+                        {
+                          $tmp_tw=extract_and_store_data($subt,$parent,$include_associated);
+                          $tw['in_reply_to_user']=$tmp_tw['user_id'];
+                          break;
+                        }
+                  }
+              continue 2;
+            }
+         }
+     }
+/******user data******/
+    if (isset($parent->includes->users))
+      {
+        foreach ($parent->includes->users as $subt)
           {
-    //        print_r($usr); exit;
-            echo "got in, changing record: ".$usr->screen_name.", ".$usr->name."\n";
-            if (!$usr->name)
-             {
-    //echo "got in, changing record: ".$usr->screen_name."\n";
-               $result2 = $link->query("UPDATE `users_"."$table` SET \n`restricted_to_public`='1' where user_screen_name='".$usr->screen_name."'");
-               if (!$result2) die("Invalid query: " . $link->sqlstate. "<hr>$query<hr>");
-               echo $usr->screen_name.": protected or deleted in DB & skipped\n";
-             }
+            if ($subt->id == $tw['user_id'])
+               {
+                 $tw['user_screen_name']=$subt->username;
+                 $tw['user_name']=$subt->name;
+                 $tw['user_location']=$subt->location;
+                 $tw['user_bio']=$subt->description;
+                 $tw['user_image_url']=str_replace("_400x400.jpg","_200x200.jpg", str_replace("_normal.jpg","_200x200.jpg",$subt->profile_image_url));
+                 $tw['user_verified']=$subt->verified;
+                 $tw['tweet_permalink_path']="https://twitter.com/".$subt->username."/status/".$tweet->id;
+                 add_user($subt); $added_users=true;
+               }
             else
               {
-                extract_and_store_data2($usr);
+                  if (!$added_users && $include_associated) { add_user($subt); $added_users=true; }
               }
           }
-        }
-  //exit;
+      }
 
-      echo "Processed (".($last_rec+1)."-$new_rec)!\n";// for ($tweet_updated_rows tweets, $user_updated_rows users updated)\n";
-  //    sleep(5);
-      $last_rec=$new_rec;
-      $k=0;
+/******geo data of tweet (if any)******/
+    if (isset($tweet->geo))
+      {
+    		if (sizeof($parent->includes->places)>0)
+          {
+      		 foreach($parent->includes->places as $p)
+      		  {
+      		    if ($tweet->geo->place_id==$p->id)
+          			{
+    		           if ($p->country) $tw['country']=$p->country."(".$p->country_code.")";
+    		           if ($p->fullname) $tw['location_fullname']=$p->full_name;
+    		           if ($p->name) $tw['location_name']=$p->name;
+    		           if ($p->place_type) $tw['location_type']=$p->place_type;
+                   break;
+          			}
+            }
+          }
+      }
+
+    if (isset($tweet->attachments->media_keys))
+     {
+       foreach($tweet->attachments->media_keys as $media_key)
+        {
+    		 foreach($parent->includes->media as $med)
+    		  {
+    		    if ($media_key==$med->media_key)
+        			{
+                 if ($med->type=="photo" || $med->type=="animated_gif") $tw['has_image']=1;
+                 elseif ($med->type=="video") $tw['has_video']=1;
+                 if (strpos($tw['media_link'],$med->preview_image_url)===false) $tw['media_link']=$tw['media_link']." ".$med->preview_image_url;
+                 if (strpos($tw['media_link'],$med->url)===false) $tw['media_link']=$tw['media_link']." ".$med->url;
+        			}
+          }
+          $tw['media_link']=trim($tw['media_link']);
+        }
      }
-  }
-}
 
-function extract_and_store_data($tweet)
-    {
-        global $table; global $regex; global $cases; global $link;
-	global $hash_cloud; global $from; global $to;
-    //  if ($tweet->id=="26927240864") {
-    //    print_r($tweet); exit; //}
-        $tw=array();
-        $user=array();
-        if (preg_match("/([A-Za-z]+) ([\d]+) ([\d]+\:[\d]+\:[\d]+) \+0000 ([\d]+)/si",$tweet->created_at,$d))
-            {
-              $datetime=$d[2]." ".$d[1]." ".$d[4]." ".$d[3];
-              $tw['date_time']=date('Y-m-d H:i:s',strtotime($datetime));
-            }
-        $date=date('Y-m-d',strtotime($datetime));
-/*
-        if ($to!=$date)
-          {
-            $result2 = $link->query("DELETE FROM `$table` WHERE tweet_id='".$tweet->id."'");
-            if (!$result2) die("Invalid query: " . $link->sqlstate. "<hr>$query<hr>");
-            echo $tweet->id." : Deleted tweet because it is out of date range\n";
-            return;
-          }
-*/
-        $tw['tweet_id']=$tweet->id;
-        $tw['raw_text']=$tweet->full_text;
-    //    $tmp=file_get_contents("https://api.twitter.com/1.1/statuses/oembed.json?id=".$tw['tweet_id']);
-    //    $tmp2=json_decode($tmp);
-    //    $tw['embeddable_text']=$tmp2->text;
-        $tw['full_source']=$tweet->source;
-        if ($tweet->truncated) $tw['is_truncated']=1; else $tw['is_truncated']=0;
-        if ($tweet->in_reply_to_status_id) $tw['in_reply_to_tweet']=$tweet->in_reply_to_status_id;
-        if ($tweet->in_reply_to_user_id) $tw['in_reply_to_user']=$tweet->in_reply_to_user_id;
-        $u=$tweet->user;
-        $tw['user_id']=$u->id;
-        $tw['tweet_permalink_path']="https://twitter.com/".$u->screen_name."/status/".$tweet->id;
-        /******user data******/
-        if ($u->id) $user['user_id']=$u->id;
-        if ($u->screen_name) $user['user_screen_name']=ltrim($u->screen_name,'@');
-        $tw['user_screen_name']=$user['user_screen_name'];
-        if ($u->name) $user['user_name']=$u->name;
-        if ($u->location) $user['user_location']=$u->location;
-        $user['user_followers']=0;
-        $user['user_following']=0;
-        $user['user_friends']=0;
-        $user['user_lists']=0;
-        $user['user_lists']=0;
-        $user['user_tweets']=0;
-        if ($u->followers_count>0) $user['user_followers']=$u->followers_count;
-        if ($u->following_count>0) $user['user_following']=$u->following_count;
-        if ($u->friends_count>0) $user['user_following']=$u->friends_count;
-        if ($u->protected) $user['user_protected']=$u->protected;
-        else  $user['user_protected']=0;
-        if ($u->listed_count>0) $user['user_lists']=$u->listed_count;
-        if (preg_match("/([A-Za-z]+) ([\d]+) ([\d]+\:[\d]+\:[\d]+) \+0000 ([\d]+)/si",$u->created_at,$cr))
-          {
-            $datetime=$cr[2]." ".$cr[1]." ".$cr[4]." ".$cr[3];
-            $user['user_created']=date('Y-m-d H:i:s',strtotime($datetime));
-          }
-        if ($u->favourites_count===0 || $u->favourites_count) $user['user_favorites']=$u->favourites_count;
-        if ($u->utc_offset) $user['user_utc_offset']=$u->utc_offset;
-        if ($u->time_zone) $user['user_timezone']=$u->time_zone;
-        if ($u->geo_enabled) $user['user_geo_enabled']=1; else $user['user_geo_enabled']=0;
-        if ($u->verified) $user['user_verified']=$u->verified; else $user['user_verified']=0;
-        $tw['user_verified']=$user['user_verified'];
-        if ($u->statuses_count>0) $user['user_tweets']=$u->statuses_count;
-        if ($u->lang) $user['user_lang']=$u->lang;
-        if ($u->description) $user['user_bio']=$u->description;
-        if ($u->profile_image_url_https) $user['user_image_url']=str_replace("_normal.jpg","_400x400.jpg",$u->profile_image_url_https);
-        if ($u->entities)
-         {
-           $en=$u->entities;
-           if ($en->url)
-            {
-              $urls=$en->url;
-              if (sizeof($urls)>0)
-              {
-                foreach($urls as $url1)
-                 {
-                   foreach ($url1 as $url2)
-                     {
-                      $user['user_url']=$user['user_url']." ".$url2->expanded_url;
-                     }
-                 }
-                $user['user_url']=trim($user['user_url']);
-              }
-            }
-         }
-        if (!$user['user_url'] && $u->url) { $user['user_url']=$u->url; }
-        if ($u->withheld_in_countries) $user['user_withheld_in_countries']=$u->withheld_in_countries;
-        if ($u->withheld_scope) $user['user_withheld_scope']=$u->withheld_scope;
-
-        /******resume twitter data******/
-        if (preg_match("/([\-\.\d]+)\,\s*([\-\.\d]+)/si","{$tweet->coordinates->coordinates}",$c))
-             {  $tw['coordinates_long']=$c[1]; $tweet['coordinates_lat']=$c[2]; }
-        if ($tweet->contributors) $tw['contributors']=$tweet->contributors;
-        if ($tweet->quoted_status_id) $tw['quoted_tweet_id']=$tweet->quoted_status_id;
-        if ($tweet->retweet_count===0 || $tweet->retweet_count) $tw['retweets']=$tweet->retweet_count;
-        if ($tweet->favorite_count===0 || $tweet->favorite_count) $tw['favorites']=$tweet->favorite_count;
-        if ($tweet->place)
-         {
-           $p=$tweet->place;
-           if ($p->country) $tw['country']=$p->country;
-           if ($p->fullname) $tw['location_fullname']=$p->full_name;
-           if ($p->name) $tw['location_name']=$p->name;
-           if ($p->place_type) $tw['location_type']=$p->place_type;
-         }
-        if ($tweet->retweeted_status)
-        {
-	  $tw['is_retweet']=1;
-          $retweeted=$tweet->retweeted_status;
-          $tw['retweets']=0;
-          if ($retweeted->id) $tw['retweeted_tweet_id']=$retweeted->id;
-          if ($retweeted->full_text) 
-		{
-			preg_match('/^(.+?\: ).+/', $tweet->full_text, $pref_rw);
-			$tw['raw_text']=$pref_rw[1].$retweeted->full_text;
-		}
-//if(preg_match('/\…$/',$tweet->full_text)) { print_r($tweet); print_r($tw); }                             
-          if ($retweeted->user)
-            {
-                $ruser=$retweeted->user;
-                if ($ruser->id) $tw['retweeted_user_id']=$ruser->id;
-            }
-        }
-        else $tw['is_retweet']=0;
-if ($tweet->entities)
- {
-   $en=$tweet->entities;
-    if (sizeof($en->hashtags)>0)
-       {
-         foreach($en->hashtags as $h)
+/******resume twitter data******/
+    if (isset($tweet->entities))
+     {
+       $en=$tweet->entities;
+        if (isset($en->hashtags))
            {
-              $tw['hashtags']=$tw['hashtags']." #".strtolower($h->text);
+             foreach($en->hashtags as $h)
+               {
+                  $tw['hashtags']=$tw['hashtags']." #".strtolower($h->tag);
+               }
+             $tw['hashtags']=trim($tw['hashtags']);
+             $hash_cloud=$hash_cloud." ".$tw['hashtags'];
            }
-         $tw['hashtags']=trim($tw['hashtags']);
-         $hash_cloud=$hash_cloud." ".$tw['hashtags'];
-       }
-    if (sizeof($en->user_mentions)>0)
-      {
-        foreach($en->user_mentions as $men)
-            $tw['user_mentions']=$tw['user_mentions']." @".strtolower($men->screen_name);
-        $tw['user_mentions']=trim($tw['user_mentions']);
-      }
-    if (sizeof($en->urls)>0)
-      {
-        $tw['has_link']=1;
-        foreach($en->urls as $ur)
+        if (isset($en->mentions))
           {
-//echo "Checking:".$ur->expanded_url."\n";
-            if (startswith($ur->expanded_url,"http://youtube.com/") || startswith($ur->expanded_url,"https://youtube.com/")
-              ||startswith($ur->expanded_url,"http://youtu.be/") || startswith($ur->expanded_url,"https://youtu.be/")) $tw['has_video']=1;
-            $tw['links']=$tw['links']." ".$ur->url;
-            if (strpos($tw['expanded_links'],$ur->expanded_url)===false) $tw['expanded_links']=$tw['expanded_links']." ".$ur->expanded_url;
-          }
-          $tw['links']=trim($tw['links']);
-          $tw['expanded_links']=trim($tw['expanded_links']);
-        }
-      if ($en->media)
-      {
-//echo "media!\n"; sleep(3);
-        foreach($en->media as $m)
+            foreach($en->mentions as $men)
+               {
+                $tw['user_mentions']=$tw['user_mentions']." @".strtolower($men->username);
+               }
+               $tw['user_mentions']=trim($tw['user_mentions']);
+           }
+        if (isset($en->urls))
           {
-//            echo "started\n"; print_r($m); sleep(3);
-            if ($m->type=="photo")
-                {
-//echo "photo!\n"; sleep(3);
-                  $tw['has_image']=1;
-                   if (strpos($tw['media_link'],$m->media_url_https)===false) $tw['media_link']=$tw['media_link']." ".$m->media_url_https;
-                }
-            if ($m->type=="video")
-                {
-//echo "video!\n"; sleep(3);
-                  $tw['has_video']=1;
-                  if (strpos($tw['media_link'],$m->media_url_https)===false) $tw['media_link']=$tw['media_link']." ".$m->media_url_https;
-                }
-          }
-      }
-     $tw['media_link']=trim($tw['media_link']);
-   }
-//  echo "h_img:".$tw['has_image']."\n"; sleep(3);
-if ($tweet->extended_entities)
-{
-//echo "extended!"; print_r($tweet->extended_entities); sleep(3);
-  foreach($tweet->extended_entities as $ex1)
-    {
-      foreach($ex1 as $ex)
-        {
-//                print_r($ex); exit;
-          if ($ex->type=="photo" || $ex->type=="multi photo" ||$ex->type=="animated gif")
-            {
-              $tw['has_image']=1;
-              if (strpos($tw['media_link'],$ex->media_url_https)===false) $tw['media_link']=$tw['media_link']." ".$ex->media_url_https;
-            }
-          else $tw['has_image']=0;
-          if ($ex->type=="video")
+            $tw['has_link']=1;
+            foreach($en->urls as $ur)
               {
-                $tw['has_video']=1;
-                if (strpos($tw['media_link'],$ex->media_url_https)===false) $tw['media_link']=$tw['media_link']." ".$ex->media_url_https;
+                //echo "Checking:".$ur->expanded_url."\n";
+                if (isset($ur->unwound_url)) $ur->expanded_url=$ur->unwound_url;
+                if (strpos($tw['links'],$ur->url)===true || strpos($tw['expanded_links'],$ur->expanded_url)===true) continue;
+                if (strpos($tw['links']=$tw['links'],$ur->url)===false) $tw['links']=$tw['links']." ".$ur->url;
+                if (strpos($tw['expanded_links'],$ur->expanded_url)===false) $tw['expanded_links']=$tw['expanded_links']." ".$ur->expanded_url;
+                if (isset($ur->title))
+                  {
+                    if (isset($ur->description))
+                      {
+                        $tw['raw_text']=$tw['raw_text']." ".$tw['expanded_links']."[".$ur->title." ".$ur->description."]";
+                      }
+                  }
+                if (isset($ur->images))
+                  {
+                    foreach ($ur->images as $img)
+                      {
+                         $tw['has_image']=1;
+                         if (isset($img->url))
+                          {
+                            if (strpos($tw['media_link'],$img->url)===false) $tw['media_link']=$tw['media_link']." ".$img->url;
+                          }
+                      }
+                  }
               }
-       }
-   }
-  $tw['media_link']=trim($tw['media_link']);
-}
-        if (!$tw['has_image'] && !$tw['has_video'] && !$tw['has_link'])
-          {
-            preg_match_all($regex, $tw['raw_text'], $result, PREG_PATTERN_ORDER);
-            $A = $result[0];
-            foreach($A as $B)
-            {
-    /*
-    //          echo "Checking ($B)\n";
-               $URL = GetRealURL($B);
-               if (!$URL) continue;
-    echo "Got ($URL)\n"; //exit;
-    */
-               $elnt=explode(' ',$URL);
-
-              $u_t=url_type($elnt[1]);
-               if ($u_t== "image")
-                {
-                    $tw['has_image']=1;
-                    $tw['media_link']=$tw['media_link']." ".$elnt[0];
-                }
-               elseif ($u_t== "video")
-                 {
-                     $tw['has_video']=1;
-                     $tw['media_link']=$tw['media_link']." ".$elnt[0];
-                 }
-               elseif ($u_t=="link" && $elnt[0])
-                {
-                    $tw['has_link']=1;
-//		    echo "Checking:".$elnt[0]."\n";
-		    if (startswith($elnt[0],"http://youtube.com/") || startswith($elnt[0],"https://youtube.com/")
-		      ||startswith($elnt[0],"http://youtu.be/") || startswith($elnt[0],"https://youtu.be/")) $tw['has_video']=1;
-                    $tw['expanded_links']=$tw['expanded_links']." ".$elnt[0];
-                }
-            }
-            $tw['media_link']=trim($tw['media_link']);
-            $tw['expanded_links']=trim($tw['expanded_links']);
+              $tw['links']=trim($tw['links']);
+              $tw['expanded_links']=trim($tw['expanded_links']);
+              $tw['media_link']=trim($tw['media_link']);
           }
-        if ($tweet->filter_level) $tw['filter_level']=$tweet->filter_level;
-        $tw['clear_text']=strip_tags($tw['raw_text']);
-        if (strpos($tw['clear_text'],"@")===0) $tw['is_message']=1; else $tw['is_message']=0;
-        if ($tweet->possibly_sensitive) $tw['possibly_sensitive']=$tweet->possibly_sensitive;
-        if ($tweet->withheld_copyright) $tw['withheld_copyright']=$tweet->withheld_copyright;
-        if ($tweet->withheld_in_countries) $tw['withheld_in_countries']=$tweet->withheld_in_countries;
-        if ($tweet->withheld_scope) $tw['withheld_scope']=$tweet->withheld_scope;
-        if ($tweet->lang) $tw['tweet_language']=$tweet->lang;
-        if ($tweet->source) $tw['source']=preg_replace('/.+>([^<>]+?)<.+/','$1',$tweet->source);
-        $tw['tweet_date']=date('Y-m-d',strtotime($tw['date_time']));
-        $tw['user_location']=$user['user_location'];
-        $tw['user_timezone']=$user['user_timezone'];
-        $tw['user_lang']=$user['user_lang'];
-        $tw['user_bio']=$user['user_bio'];
-        $tw['user_image_url']=$user['user_image_url'];
-        $tw['user_name']=$user['user_name'];
+      }
+    if (isset($tweet->withheld))
+     {
+      if (isset($tweet->withheld->copyright)) $tw['withheld_copyright']=$tweet->withheld->copyright;
+      if (isset($tweet->withheld->country_codes)) $tw['withheld_in_countries']=$tweet->withheld->country_codes;
+     }
 
-    //echo "\narrived\n";
-        if ($tweet)
-         {
-    //      var_dump($tweet); return;
-        //  print_r($tw);
-//          print_r($tw); print_r($user); exit;
-          put_in_database1($tw,$user);
-    //exit;
-         }
-        else
-          { echo "No tweet found: ".$tw['user_screen_name'].": ".$tw['clear_text']."\n";
-            sleep(2);
-          }
-//print_r($tw);
-    }
+    if (isset($tw['links'])) $tw['links']=trim($tw['links']);
+    if (isset($tw['expanded_links'])) $tw['expanded_links']=trim($tw['expanded_links']);
+
+    $tw['clear_text']=strip_tags($tw['raw_text']);
+    if (strpos($tw['clear_text'],"@")===0) $tw['is_message']=1; else $tw['is_message']=0;
+
+    if ($save_to_db)
+      {
+        put_tweet_in_database($tw);
+        $added_tweets_list[]=$tweet->id;
+      }
+    return $tw;
+ }
 
 function url_type($url)
     {
@@ -625,13 +483,14 @@ function url_type($url)
       if (in_array($ext, $supported_video)) return "video";
       return "link";
     }
-function put_in_database1($tweet,$user)
-      {
-        global $table; global $i; //global $tweet_updated_rows; global $user_updated_rows;
-        global $link; global $users_only; global $fix_utf8;
-    //    echo "($tweet)\n"; exit;
-    if ($tweet && !$users_only)
-       {
+
+function put_tweet_in_database($tweet)
+  {
+    global $table; global $i; //global $tweet_updated_rows; global $user_updated_rows;
+    global $link; global $fix_utf8;
+//    echo "($tweet)\n"; exit;
+    if ($tweet)
+     {
         $query = "REPLACE INTO `$table` ";
         $fields=array_keys($tweet); $names=""; $values="";
         foreach ($fields as $field)
@@ -641,61 +500,36 @@ function put_in_database1($tweet,$user)
          }
         $names=rtrim($names,","); $values=rtrim($values,",");
         $query="$query ($names) VALUES($values)";
-//echo "\ntweet query:\n\n$query\n"; exit;
+
+//echo "\ntweet query:\n\n$query\n"; //exit;
+
        $result = $link->query($query);
        if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
-    //   echo "Affected rows: ".mysql_affected_rows()."\n"; exit;
-    //   $a_rows=$link->affected_rows;
-    //   if ($link->affected_rows==1) $tweet_updated_rows++;
-    }
-
-    if ($user && !$fix_utf8)
-      {
-        $insert_part="INSERT INTO `users_"."$table` ";
-        $update_part = "ON DUPLICATE KEY UPDATE \n";
-        $query="`user_name`='".$link->real_escape_string($user['user_name'])."'";
-        $fields=array_keys($user);
-        $names="`user_id`";
-        $values="'".$user['user_id']."'";
-        foreach ($fields as $field)
-         {
-           if ($field!='user_name' && $field!='user_id')
-             $query="$query, \n`$field`='".$link->real_escape_string($user[$field])."'";
-           if ($field!='user_id')
-             {
-               $names="$names, `$field`";
-               $values="$values, '".$link->real_escape_string($user[$field])."'";
-             }
-         }
-        $query="$insert_part ($names) values ($values) $update_part $query;";
-//       echo "\nuser query:\n\n$query\n"; exit;
-       $result = $link->query($query);
-       if (!$result) die("Invalid query: " . $link->sqlstate. "<hr>$query<hr>");
-    //   if ($link->affected_rows>$a_rows) $user_updated_rows++;
-    //   echo "\n---\n".$tweet_updated_rows." ".$user_updated_rows." (".$link->affected_rows.")\n---\n";
-     }
-    }
-
+  //   echo "Affected rows: ".mysql_affected_rows()."\n"; exit;
+  //   $a_rows=$link->affected_rows;
+  //   if ($link->affected_rows==1) $tweet_updated_rows++;
+      }
+ }
 function update_response_mentions()
       {
         global $table; global $link; global $mysql_db;
-        $tmp="user_all_mentions_"."$table"; $u_m="user_mentions_".$table;
-        echo "Adding responses, responses to tweeter and mentions of tweeter data to table ...<br>\n";
+        $all_m="user_all_mentions_"."$table"; $u_m="user_mentions_".$table;
+        echo "Adding replies, replies to tweeter and mentions of tweeter data to table ...<br>\n";
 
-        $query="CREATE TABLE IF NOT EXISTS $tmp like 1_empty_all_mentions";
+        $query="CREATE TABLE IF NOT EXISTS $all_m like 1_empty_all_mentions";
         $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-        $query="TRUNCATE TABLE $tmp";
+        $query="TRUNCATE TABLE $all_m";
         $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-	$query="INSERT INTO $tmp (tweet_id,responses) (SELECT $table.in_reply_to_tweet,count($table.tweet_id) FROM $table WHERE $table.is_protected_or_deleted is null and $table.date_time is not null AND $table.in_reply_to_tweet is not null group by $table.in_reply_to_tweet order by count($table.tweet_id) desc)";
-	$result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
+        	$query="INSERT INTO $all_m (tweet_id,replies) (SELECT $table.in_reply_to_tweet,count($table.tweet_id) FROM $table WHERE $table.is_protected_or_deleted is null and $table.date_time is not null AND $table.in_reply_to_tweet is not null group by $table.in_reply_to_tweet order by count($table.tweet_id) desc)";
+      	$result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-	$query="UPDATE IGNORE $tmp,$table SET $tmp.user_screen_name = LOWER($table.user_screen_name), $tmp.user_id = $table.user_id  WHERE $tmp.tweet_id = $table.tweet_id";
-	$result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
+      	$query="UPDATE IGNORE $all_m,$table SET $all_m.user_screen_name = LOWER($table.user_screen_name), $all_m.user_id = $table.user_id  WHERE $all_m.tweet_id = $table.tweet_id";
+      	$result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-	$query="UPDATE $tmp,$table SET $tmp.responses_to_tweeter=(SELECT count($table.tweet_id) FROM $table WHERE $table.in_reply_to_user is not null AND $table.is_protected_or_deleted is null and $table.date_time is not null AND $tmp.user_id=$table.in_reply_to_user group by $table.in_reply_to_user) WHERE $tmp.user_id=$table.in_reply_to_user";
-	$result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
+      	$query="UPDATE $all_m,$table SET $all_m.responses_to_tweeter=(SELECT count($table.tweet_id) FROM $table WHERE $table.in_reply_to_user is not null AND $table.is_protected_or_deleted is null and $table.date_time is not null AND $all_m.user_id=$table.in_reply_to_user group by $table.in_reply_to_user) WHERE $all_m.user_id=$table.in_reply_to_user";
+      	$result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
         $query="CREATE TABLE IF NOT EXISTS $u_m LIKE 1_empty_user_mentions";
         $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
@@ -716,25 +550,24 @@ function update_response_mentions()
 //echo "\n\n$query\n\n";
         $result=$link->query($query);if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-
-for ($i=1; $i<=10; $i++)
-        {
-          $query="INSERT INTO `$tmp` (user_screen_name,mention$i) (SELECT SUBSTR($u_m.mention$i,2),count($u_m.tweet_id) AS counts FROM $u_m WHERE $u_m.mention$i<>'' group by $u_m.mention$i order by count($u_m.tweet_id) desc) on duplicate key update $tmp.mention$i=VALUES(mention$i)";
-          $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
-        }
-        $query="UPDATE $tmp SET mentions_of_tweeter=(mention1+mention2+mention3+mention4+mention5+mention6+mention7+mention8+mention9+mention10)";
-        $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
-        
-        $query="update $table,$tmp set $table.responses=$tmp.responses where $table.tweet_id=$tmp.tweet_id and $tmp.tweet_id is not null";
+        for ($i=1; $i<=10; $i++)
+          {
+            $query="INSERT INTO `$all_m` (user_screen_name,mention$i) (SELECT SUBSTR($u_m.mention$i,2),count($u_m.tweet_id) AS counts FROM $u_m WHERE $u_m.mention$i<>'' group by $u_m.mention$i order by count($u_m.tweet_id) desc) on duplicate key update $all_m.mention$i=VALUES(mention$i)";
+            $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
+          }
+        $query="UPDATE $all_m SET mentions_of_tweeter=(mention1+mention2+mention3+mention4+mention5+mention6+mention7+mention8+mention9+mention10)";
         $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-        $query="update $table,$tmp set $table.responses_to_tweeter=$tmp.responses_to_tweeter where $table.user_id=$tmp.user_id and $tmp.user_id is not null";
+        $query="update $table,$all_m set $table.replies=$all_m.replies where $table.tweet_id=$all_m.tweet_id and $all_m.tweet_id is not null";
         $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-        $query="update $table,$tmp set $table.mentions_of_tweeter=$tmp.mentions_of_tweeter where LOWER($table.user_screen_name)=LOWER($tmp.user_screen_name) and $tmp.user_screen_name is not null";
+        $query="update $table,$all_m set $table.responses_to_tweeter=$all_m.responses_to_tweeter where $table.user_id=$all_m.user_id and $all_m.user_id is not null";
         $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-//        $link->query("DROP TABLE $tmp");
+        $query="update $table,$all_m set $table.mentions_of_tweeter=$all_m.mentions_of_tweeter where LOWER($table.user_screen_name)=LOWER($all_m.user_screen_name) and $all_m.user_screen_name is not null";
+        $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
+
+//        $link->query("DROP TABLE $all_m");
 
         $query="UPDATE user_mentions_".$table.",$table "."
         SET user_mentions_".$table.".in_response_to_tweet=$table.in_reply_to_tweet,user_mentions_".$table.".in_response_to_user_id=$table.in_reply_to_user
@@ -760,396 +593,291 @@ for ($i=1; $i<=10; $i++)
         "`.`tweet_datetime`=`".$table."`.`date_time` WHERE `user_mentions_".$table."`.`tweet_id`=`".$table."`.`tweet_id`";
         $result=$link->query($query);if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
-        echo "\n"."Done with updating user mentions...\n";
-
-        echo "\n"."Done with updating responses...\n";
+        echo "\nDone with updating user mentions and replies...\n";
       }
 
 function update_kumu_files($table)
       {
-global $link;
-$maximum_strength=5;
-$minimum_strength=0;
-$top_limit=array("1000","5000","10000");
-$max_kumu_size=2000;
+       global $link;
+       $maximum_strength=5;
+       $minimum_strength=0;
+       $top_limit=array("1000","5000","10000");
+       $max_kumu_size=2000;
 
-        echo "Kumu: Doing $table <br>\nCreating element for top tweets...";
+       echo "Kumu: Doing $table <br>\nCreating element for top tweets...";
 
-foreach ($top_limit as $toplimit)
-  {
-    echo "\nTop $toplimit :\n";
-        $query= "SELECT
-        LOWER($table.user_screen_name),
-        $table.user_image_url,'','',
-        $table.date_time,
-        $table.raw_text,
-        $table.tweet_permalink_path,
-        $table.hashtags,
-        $table.tweet_language,
-        $table.source,
-        $table.retweets,
-        $table.favorites,
-        $table.responses,
-        LOWER($table.user_mentions),
-        $table.user_name,
-        $table.user_location,
-        $table.user_lang,
-        $table.user_bio,
-        $table.user_verified,
-        $table.in_reply_to_user,
-        $table.is_retweet,
-        $table.has_image,
-        $table.has_video,
-        $table.has_link,
-        $table.media_link,
-        $table.expanded_links,
-        $table.location_name,
-        $table.country
-        FROM $table WHERE $table.is_protected_or_deleted is null and $table.date_time is not null ORDER BY retweets DESC";
+       foreach ($top_limit as $toplimit)
+        {
+          echo "\nTop $toplimit :\n";
+          $query= "SELECT
+          LOWER($table.user_screen_name) as screen_name,
+          $table.user_image_url,
+          '' as profile_link,
+          '' as tweet_type,
+          $table.date_time,
+          $table.raw_text,
+          $table.tweet_permalink_path,
+          $table.hashtags,
+          $table.tweet_language,
+          $table.source,
+          $table.retweets,
+          $table.quotes,
+          $table.favorites,
+          $table.replies,
+          LOWER($table.user_mentions) as user_mentions,
+          $table.user_name,
+          $table.user_location,
+          $table.user_lang,
+          $table.user_bio,
+          $table.user_verified,
+          $table.in_reply_to_user,
+          $table.is_retweet,
+          $table.is_quote,
+          $table.is_reply,
+          $table.has_image,
+          $table.has_video,
+          $table.has_link,
+          $table.location_name,
+          $table.country
+          FROM $table WHERE $table.is_protected_or_deleted is null and $table.date_time is not null ORDER BY retweets DESC";
 
-	$first_line=array("Label","Image","Profile Link","Type","Date","Tweet Text","Tweet Link","Tags","Tweet Language","Source",
-	"Retweets","Favorites","Responses","User Mentions","User Full Name","User Location","User Language","User Bio",
-	"User Verified","In Reply to User","Is a Retweet","Has an Image","Has a Video","Has a Link","Media Link",
-	"Other Links","Tweeted From Location","Tweeted from Country");
+        	$first_line=array("Label","Image","Profile Link","Type","Date","Tweet Text","Tweet Link","Tags","Tweet Language","Source",
+        	"Retweets","Favorites","Quotes","Replies","User Mentions","User Full Name","User Location","User Language","User Bio",
+        	"User Verified","In Reply to User","Is a Retweet","Has an Image","Has a Video","Has a Link","Media Link",
+        	"Other Links","Tweeted From Location","Tweeted from Country");
 
-            if ($result = $link->query($query))
-                {
-                  if (!$result->num_rows) { echo "No rows in the database matched your query.<br>\n";  }
-                  $total=$result->num_rows;
-                }
-            else die("Error in query: ". $link->error.": $query");
-
-$fp=fopen("tmp/kumu/$table"."_"."top_tweets_".$toplimit.".csv",'w');
-fputcsv($fp, $first_line);
-	    $ind=0;
-            while ($row = $result->fetch_array(MYSQLI_NUM))
+          if ($result = $link->query($query))
               {
-		if ($ind==$toplimit) break;
-		$row[2]="https://twitter.com/".$row[0];
-		if ($row[20]) $row[3]="Retweet";
-		elseif ($row[21]) $row[3]="Tweet with image";
-		elseif ($row[22]) $row[3]="Tweet with video";
-		elseif ($row[23]) $row[3]="Tweet with link";
-		elseif ($row[20]) $row[3]="Tweet with reply";
-		else $row[3]="Regular tweet";
-		$row[5]=preg_replace("/[\r\n]+/"," ",$row[5]);
-		$row[17]=preg_replace("/[\r\n]+/"," ",$row[17]);
-		$row[5]=str_replace("\"","'",$row[5]);
-		$row[17]=str_replace("\"","'",$row[17]);
-                $row[7]=preg_replace("/\s+/","|",$row[7]);
-                $row[13]=preg_replace("/\s+/","|",$row[13]);
-		fputcsv($fp, $row);
-		$ind++;
+                if (!$result->num_rows) { echo "No rows in the database matched your query.<br>\n";  }
+                $total=$result->num_rows;
               }
-fclose($fp);
-     echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."top_tweets_".$toplimit.".csv'>file ($table"."_"."top_tweets_".$toplimit.".csv)</a><br>\n";
-    }
-//die();
-///////////////////////
-///////////////////////
-/* Get all user records to compare to */
+          else die("Error in query: ". $link->error.": $query");
 
-$query = "SELECT LOWER(user_screen_name) FROM users_".$table." WHERE user_screen_name is not null";
-            if ($result = $link->query($query))
-                {
-                  if (!$result->num_rows) { echo "No users in the database matched your query.<br>\n";  }
-                  $total=$result->num_rows;
-                }
-            else die("Error in query: ". $link->error.": $query");
-            $valid_users=array();
-            while ($row = $result->fetch_array())
-              {
-		$valid_users[$row[0]]=1;
+          $fp=fopen("tmp/kumu/$table"."_"."top_tweets_".$toplimit.".csv",'w');
+          fputcsv($fp, $first_line);
+        	$ind=0;
+          while ($row = $result->fetch_assoc())
+            {
+          		if ($ind==$toplimit) break;
+          		$row['profile_link']="https://twitter.com/".$row['screen_name'];
+          		if ($row['is_retweet']) $row['tweet_type']="Retweet";
+              elseif ($row['is_reply']) $row['tweet_type']="Tweet with reply";
+          		elseif ($row['has_image']) $row['tweet_type']="Tweet with image";
+          		elseif ($row['has_video']) $row['tweet_type']="Tweet with video";
+          		elseif ($row['has_link']) $row['tweet_type']="Tweet with link";
+          		else $row['tweet_type']="Regular tweet";
+          		$row['raw_text']=preg_replace("/[\r\n]+/"," ",$row['raw_text']);
+              $row['raw_text']=str_replace("\"","'",$row['raw_text']);
+          		$row['bio']=preg_replace("/[\r\n]+/"," ",$row['bio']);
+          		$row['bio']=str_replace("\"","'",$row['bio']);
+              $row['hashtags']=preg_replace("/\s+/","|",$row['hashtags']);
+              $row['user_mentions']=preg_replace("/\s+/","|",$row['user_mentions']);
+          		fputcsv($fp, $row);
+          		$ind++;
+            }
+         fclose($fp);
+         echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."top_tweets_".$toplimit.".csv'>file ($table"."_"."top_tweets_".$toplimit.".csv)</a><br>\n";
+        }
+
+      $query = "SELECT LOWER(user_screen_name) FROM users_".$table." WHERE user_screen_name is not null";
+      if ($result = $link->query($query))
+        {
+          if (!$result->num_rows) { echo "No users in the database matched your query.<br>\n";  }
+          $total=$result->num_rows;
+        }
+      else die("Error in query: ". $link->error.": $query");
+      $valid_users=array();
+      while ($row = $result->fetch_array())
+        {
+      		$valid_users[$row[0]]=1;
 	      }
-/****************/
-//print_r($valid_users);// exit;
 
-	echo "Kumu: Doing $table <br>\nCreating connection for responses...";
-	$t="user_mentions_".$table;
+    	echo "Kumu: Doing $table <br>\nCreating connection for replies...";
+    	$t="user_mentions_".$table;
 
-	$query= "SELECT LOWER($t.user_screen_name),LOWER($t.in_response_to_user_screen_name),$t.in_response_to_tweet,$table.is_retweet,".
-		"$t.tweet_datetime,$table.tweet_permalink_path,$table.user_verified,$table.has_image,$table.has_video,".
-		"$table.has_link,$table.media_link,$table.expanded_links,$table.source,$table.location_name,$table.country,".
-		"$table.tweet_language,$table.raw_text,$table.hashtags,$table.user_mentions,$table.retweets,$table.favorites,$t.tweet_id ".
-		"FROM $t,$table WHERE $t.in_response_to_user_screen_name is not null and $t.user_screen_name is not null ".
-		"AND $table.is_protected_or_deleted is null and $table.date_time is not null ".
-		"and $t.tweet_id=$table.tweet_id order by $table.retweets DESC";
+    	$query= "SELECT LOWER($t.user_screen_name) as screen_name,LOWER($t.in_response_to_user_screen_name) as response_screen_name,".
+      "'' as tweet_type,$t.in_response_to_tweet,$table.is_retweet,".
+  		"$table.is_quote,$table.is_reply,$t.tweet_datetime,$table.tweet_permalink_path,$table.user_verified,$table.has_image,$table.has_video,".
+  		"$table.has_link,$table.media_link,$table.expanded_links,$table.source,$table.location_name,$table.country,".
+  		"$table.tweet_language,$table.raw_text,$table.hashtags,$table.user_mentions,$table.retweets,$table.quotes,$table.replies,$table.favorites,$t.tweet_id ".
+  		"FROM $t,$table WHERE $t.in_response_to_user_screen_name is not null and $t.user_screen_name is not null ".
+  		"AND $table.is_protected_or_deleted is null and $table.date_time is not null ".
+  		"and $t.tweet_id=$table.tweet_id order by $table.retweets DESC";
 
-//echo "\n $query\n";
+      if ($result = $link->query($query))
+          {
+            if (!$result->num_rows) { echo "No data rows in the database matched your query.<br>\n";  }
+            $total=$result->num_rows;
+          }
+      else die("Error in query: ". $link->error.": $query");
 
-            if ($result = $link->query($query))
-                {
-                  if (!$result->num_rows) { echo "No data rows in the database matched your query.<br>\n";  }
-                  $total=$result->num_rows;
-                }
-            else die("Error in query: ". $link->error.": $query");
-
-            $first_line=array("From","To","Type","Date","Link","From_Verified_User","Is_Image",
-			      "Is_Video","Is_Link","Media_Link","Other_Links","Source","Location",
-		   	      "Language","Content","Hashtags","Mentions","Retweets","Favorites","Tweet_ID");
+      $first_line=array("From","To","Type","Date","Link","From_Verified_User","Is_Image",
+      "Is_Video","Is_Link","Media_Link","Other_Links","Source","Location",
+	    "Language","Content","Tags","Mentions","Retweets","Quotes","Replies","Favorites","Tweet_ID");
 	    $all_responses=array(); $all_users=array();
-	    $ind=0; $indx=0;
-$fp=fopen("tmp/kumu/$table"."_"."responses.csv",'w');
-fputcsv($fp, $first_line);
-            while ($row = $result->fetch_array())
-              {
-                $row[0]=ltrim($row[0],'@'); $row[1]=ltrim($row[1],'@');
-		if (!isset($valid_users[$row[0]])) { /*echo "Skipping (${row[0]})...";*/ continue; }
-		if (!isset($valid_users[$row[1]])) { /*echo "Skipping (${row[1]})...";*/ continue; }
-//echo "\nGot in!\n";
-		$ind++;
-		if ($row[3]) { $row[2]="Retreet"; } elseif ($row[2]) { $row[2]="Reply to tweet"; } else $row[2]="Reply to tweeter";
-                if ($row[13] || $row[14])  { $row[13]=$row[13].", ".$row[14]; $row[13]=trim($row[13]); }
+	    $indx=0;
+      $fp=fopen("tmp/kumu/$table"."_responses.csv",'w');
+      fputcsv($fp, $first_line);
+      while ($row = $result->fetch_assoc())
+        {
+          $new_row=array(); foreach ($first_line as $item) { $new_row[$item]=""; }
+          $new_row['From']=ltrim($row['screen_name'],'@');
+          $new_row['To']=ltrim($row['response_screen_name'],'@');
+      		if (!isset($valid_users[$row['screen_name']])) { /*echo "Skipping (${row[0]})...";*/ continue; }
+      		if (!isset($valid_users[$row['response_screen_name']])) { /*echo "Skipping (${row[1]})...";*/ continue; }
+      		if ($row['is_retweet']) { $new_row['Type']="Retweet"; }
+          elseif ($row['is_quote']) { $new_row['Type']="Quote of a tweet"; }
+          elseif ($row['is_reply']) { $new_row['Type']="Reply to tweet"; }
+          else $new_row['Type']="Regular tweet";
+          if ($row['location_name'] || $row['country'])
+            { $new_row['Location']=trim($row['location_name'].", ".$row['country']); }
+          $new_row['Content']=str_replace("\"","'",preg_replace("/[\r\n]+/"," ",$row['raw_text']));
+          if ($row['hashtags']) $new_row['Tags']=preg_replace("/\s+/","|",$row['hashtags']);
+          if ($row['user_mentions']) $new_row['Mentions']=preg_replace("/\s+/","|",$row['user_mentions']);
+      		$all_responses[$row['tweet_id']]=1;
+      		if (!isset($all_users[$row['screen_name']])) $all_users[$row['screen_name']]=1;
+      		if (!isset($all_users[$row['response_screen_name']])) $all_users[$row['response_screen_name']]=1;
 
-                $row[5]=preg_replace("/[\r\n]+/"," ",$row[5]);
-                $row[16]=preg_replace("/[\r\n]+/"," ",$row[16]);
-		$row[5]=str_replace("\"","'",$row[5]);
-		$row[16]=str_replace("\"","'",$row[16]);
-                $row[18]=preg_replace("/\s+/","|",$row[18]);
-                $line=array(); $ind2=0;
-                for ($k=0; $k<22; $k++)
-                   {
-                      if ($k==14 || $k==3) continue;
-                      $line[$ind2]=$row[$k];
-		      $ind2++;
-                   }
-		$all_responses[$row[21]]=1;
-		if (!isset($all_users[$row[0]])) $all_users[$row[0]]=1;
-		if (!isset($all_users[$row[1]])) $all_users[$row[1]]=1;
-//echo implode(",",$line)."\n";
-fputcsv($fp, $line);
-		$indx++;
-		if ($indx>=$max_kumu_size) break;
-              }
-fclose($fp);
-            echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."responses.csv'>file ($table"."_"."responses.csv)</a><br>\n";
+          $new_row['Date']=$row['tweet_datetime'];
+          $new_row['Link']=$row['tweet_permalink_path'];
+          $new_row['From_Verified_User']=$row['user_verified'];
+          $new_row['Is_Image']=$row['has_image'];
+          $new_row['Is_Video']=$row['has_video'];
+          $new_row['Is_Link']=$row['has_link'];
+          $new_row['Media_Link']=$row['media_link'];
+          $new_row['Other_Links']=$row['expanded_links'];
+          $new_row['Source']=$row['source'];
+          $new_row['Location']=$row['location_name'];
+          $new_row['Language']=$row['tweet_language'];
+          $new_row['Tags']=$row['hashtags'];
+          $new_row['Retweets']=$row['retweets'];
+          $new_row['Quotes']=$row['quotes'];
+          $new_row['Replies']=$row['replies'];
+          $new_row['Favorites']=$row['favorites'];
+          $new_row['Tweet_ID']=$row['tweet_id'];
 
-//die("done\n");
+          fputcsv($fp, $new_row);
+      		$indx++;
+      		if ($indx>=$max_kumu_size) break;
+        }
 
-echo "Kumu: DONE\n\nCreating connection for mentions...";
+      fclose($fp);
+      echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."responses.csv'>file ($table"."_"."responses.csv)</a><br>\n";
 
-        $query= "SELECT LOWER($t.user_screen_name),$t.mention1,$t.mention2,$t.mention3,$t.mention4,$t.mention5,$t.mention6,$t.mention7,".
-		"$t.mention8,$t.mention9,$t.mention10,".
-		"$t.tweet_datetime,$table.is_retweet,$table.tweet_permalink_path,$table.user_verified,$table.has_image,$table.has_video,".
-                "$table.has_link,$table.media_link,$table.expanded_links,$table.source,$table.location_name,$table.country,".
-                "$table.tweet_language,$table.raw_text,$table.hashtags,$table.user_mentions,$table.retweets,$table.favorites,$t.tweet_id ".
-                "FROM $t,$table WHERE $t.mention1>'' and $t.user_screen_name is not null and $t.tweet_id=$table.tweet_id ".
-		"AND $table.is_protected_or_deleted is null and $table.date_time is not null ".
-		"order by $table.retweets DESC";
+      $query= "SELECT LOWER($t.user_screen_name) as screen_name,$t.mention1,$t.mention2,$t.mention3,$t.mention4,$t.mention5,$t.mention6,$t.mention7,".
+  		"$t.mention8,$t.mention9,$t.mention10,".
+  		"$t.tweet_datetime,$table.is_retweet,$table.is_quote,$table.is_reply,$table.tweet_permalink_path,$table.user_verified,$table.has_image,$table.has_video,".
+      "$table.has_link,$table.media_link,$table.expanded_links,$table.source,$table.location_name,$table.country,".
+      "$table.tweet_language,$table.raw_text,$table.hashtags,$table.user_mentions,$table.retweets,$table.quotes,$table.replies,$table.favorites,$t.tweet_id ".
+      "FROM $t,$table WHERE $t.mention1>'' and $t.user_screen_name is not null and $t.tweet_id=$table.tweet_id ".
+  		"AND $table.is_protected_or_deleted is null and $table.date_time is not null ".
+  		"order by $table.retweets DESC";
 
-            if ($result = $link->query($query))
-                {
-                  if (!$result->num_rows) { echo "No results in the database matched your query.<br>\n";  }
-                  $total=$result->num_rows;
-                }
-            else die("Error in query: ". $link->error.": $query");
-            $first_line=array("From","To","Type","Date","Position","Link","From_Verified_User","Is_Image","Is_Video",
-			      "Is_Link","Media_Link","Other_Links","Source","Location","Language","Content","Hashtags",
-			      "Mentions","Retweets","Favorites","Tweet_ID");
+      if ($result = $link->query($query))
+          {
+            if (!$result->num_rows) { echo "No results in the database matched your query.<br>\n";  }
+            $total=$result->num_rows;
+          }
+      else die("Error in query: ". $link->error.": $query");
+      $first_line=array("From","To","Type","Date","Position","Link","From_Verified_User","Is_Image","Is_Video",
+      "Is_Link","Media_Link","Other_Links","Source","Location","Language","Content","Tags",
+      "Mentions","Retweets","Quotes","Replies","Favorites","Tweet_ID");
 	    $all_mentions=array();
 	    $indx=0;
 	    $fp=fopen("tmp/kumu/$table"."_"."mentions.csv",'w');
 	    fputcsv($fp, $first_line);
-            while ($row = $result->fetch_array())
-              {
-		$row[0]=ltrim($row[0],'@');
-		$row[1]=ltrim($row[1],'@');
-		if (!isset($valid_users[$row[0]])) continue;
-	        if (!isset($all_responses[$row[29]]))
-		   {
-			$mention="mention only";
-			if (!isset($all_mentions[$row[29]])) $all_mentions[$row[29]]=1;
-		   }
-		else
-		   {
-		     $mention="response and mention";
-		   }
-                if ($row[21] || $row[22]){ $row[21]=$row[21].", ".$row[22]; $row[21]=trim($row[21]); }
-                if ($row[25]) $row[25]=preg_replace("/\s+/","|",$row[25]);
-                if ($row[26]) $row[26]=preg_replace("/\s+/","|",$row[26]);
-                $row[24]=preg_replace("/[\r\n]+/"," ",$row[24]);
-		$row[24]=str_replace("\"","'",$row[24]);
-                if (!isset($all_users[$row[0]])) $all_users[$row[0]]=1;
-                $ind=5; $line=array();
-                $line[0]=$row[0]; $line[1]=$row[1]; $line[2]=$mention; $line[3]=$row[11]; $line[4]=1;
-                for ($k=13; $k<30; $k++) { if ($k!=22) { $line[$ind]=$row[$k]; $ind++; } }
-                if (isset($valid_users[$row[1]]))
-                  {
-                   if (!isset($all_users[$row[1]])) $all_users[$row[1]]=1;
-		   fputcsv($fp, $line);
-		  }
-		for($i=2; $i<10; $i++)
-		  {
-		    if (!$row[$i]) break;
-                    $row[$i]=ltrim($row[$i],'@');
-		    if (!isset($valid_users[$row[$i]])) continue;
-                    if (!isset($all_users[$row[$i]])) $all_users[$row[$i]]=1;;
-                    $line[0]=$row[0]; $line[1]=$row[$i]; $line[2]="mention only"; $line[3]=$row[11]; $line[4]=$i;
-		    fputcsv($fp, $line);
-		  }
-		$indx++;
-                if ($indx>=$max_kumu_size) break;
-	     }
-fclose($fp);
-            echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."mentions.csv'>file ($table"."_"."mentions.csv)</a><br>\n";
-
-//echo "\n---\nResponse tweets"; print_r($all_responses);
-//echo "\n---\nMentions tweets:\n"; print_r($all_mentions);
-//echo "\n---\nUsers:\n"; print_r($all_users);
-
-        echo "\nKumu: Creating elements for users...";
-        $first_line=array("Label","Image","User Verified","Link","Bio","Language","Location","Tweets","Followers",
-			  "Following","Favorites","Lists","Created Date","Profile Page");
-        $fp=fopen("tmp/kumu/$table"."_"."users.csv",'w');
-        fputcsv($fp, $first_line);
-
-        $query= "SELECT LOWER(user_screen_name),user_image_url,user_verified,user_url,user_bio,user_lang,user_location,user_tweets,".
-		"user_followers,user_following,user_favorites,user_lists,user_created FROM users_".$table;;
-
-            if ($result = $link->query($query))
-                {
-                  if (!$result->num_rows) { echo "No results in the database matched your query.<br>\n";  }
-                  $total=$result->num_rows;
-                }
-            else die("Error in query: ". $link->error.": $query");
-            while ($row = $result->fetch_array(MYSQLI_NUM))
-              {
-                if (!isset($all_users[$row[0]])) continue;
-		$row[13]="https://twitter.com/".$row[0];
-                $row[4]=preg_replace("/[\r\n]+/"," ",$row[4]);
-		$row[4]=str_replace("\"","'",$row[4]);
-
-		fputcsv($fp, $row);
-              }
-fclose($fp);
-            echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."users.csv'>file ($table"."_"."users.csv)</a><br>\n";
-/********************************************************/
-/*
-echo "\nMappr: Creating top 1000 & 2000 nodes for Mappr (with duplicates)...";
-$first_line=array("id","full_name","Is_user_verified","user_location","user_language","user_bio","user_image_url","tweets_total","retweets_total",
-                  "mentions","hashtags","media_urls","other_urls","sources","profile_url");
-$fp1=fopen("mappr/mappr_".$table."_"."top_1000_all.csv",'w');
-$fp2=fopen("mappr/mappr_".$table."_"."top_2000_all.csv",'w');
-fputcsv($fp1, $first_line);
-fputcsv($fp2, $first_line);
-
-$link->query("SET SESSION group_concat_max_len = 1000000");
-
-$query= "select LOWER(user_screen_name), user_name, user_verified, user_location, user_lang, user_bio, user_image_url, count(tweet_id) as tweets_total, sum(retweets) as retweets_total, group_concat(user_mentions SEPARATOR ' ') as mentions, group_concat(hashtags SEPARATOR ' ') as hashtags,group_concat(media_link SEPARATOR ' ') as media_links, group_concat(expanded_links SEPARATOR ' ') as other_links, group_concat(source SEPARATOR '|') as sources from $table group by user_screen_name order by sum(retweets) desc";
-
-    if ($result = $link->query($query))
+      while ($row = $result->fetch_assoc())
         {
-          if (!$result->num_rows) { echo "No results in the database matched your query.<br>\n";  }
-          $total=$result->num_rows;
+          $new_row=array(); foreach ($first_line as $item) { $new_row[$item]=""; }
+          $new_row['From']=ltrim($row['screen_name'],'@');
+      		$new_row['To']=ltrim($row['mention1'],'@');
+      		if (!isset($valid_users[$row['screen_name']])) continue;
+	        if (!isset($all_responses[$row['tweet']]))
+      		   {
+          			$mention="mention only";
+          			if (!isset($all_mentions[$row['tweet']])) $all_mentions[$row[$row['tweet']]]=1;
+      		   }
+      		else
+      		   {
+      		     $mention="response and mention";
+      		   }
+          if ($row['location_name'] || $row['country']) { $new_row['Location']=trim($row['location_name'].", ".$row['country']); }
+          if ($row['hashtags']) $new_row['Tags']=preg_replace("/\s+/","|",$row['hashtags']);
+          if ($row['user_mentions']) $new_row['Mentions']=preg_replace("/\s+/","|",$row['user_mentions']);
+          $new_row['Content']=str_replace("\"","'",preg_replace("/[\r\n]+/"," ",$row['raw_text']));
+          if (!isset($all_users[$row['screen_name']])) $all_users[$row['screen_name']]=1;
+
+          $new_row['Position']=1;
+          $new_row['Date']=$row['tweet_datetime'];
+          $new_row['Link']=$row['tweet_permalink_path'];
+          $new_row['From_Verified_User']=$row['user_verified'];
+          $new_row['Is_Image']=$row['has_image'];
+          $new_row['Is_Video']=$row['has_video'];
+          $new_row['Is_Link']=$row['has_link'];
+          $new_row['Media_Link']=$row['media_link'];
+          $new_row['Other_Links']=$row['expanded_links'];
+          $new_row['Source']=$row['source'];
+          $new_row['Location']=$row['location_name'];
+          $new_row['Language']=$row['tweet_language'];
+          $new_row['Retweets']=$row['retweets'];
+          $new_row['Quotes']=$row['quotes'];
+          $new_row['Replies']=$row['replies'];
+          $new_row['Favorites']=$row['favorites'];
+          $new_row['Tweet_ID']=$row['tweet_id'];
+
+          if (isset($valid_users[$row['mention1']]))
+            {
+               if (!isset($all_users[$row['mention1']])) $all_users[$row['mention1']]=1;
+        		   fputcsv($fp, $new_row);
+      		  }
+      		for($i=2; $i<=10; $i++)
+      		  {
+              $m_i="mention".(string)$i;
+      		    if (!$row[$m_i]) break;
+              $row[$m_i]=ltrim($row[$m_i],'@');
+      		    if (!isset($valid_users[$row[$m_i]])) continue;
+              if (!isset($all_users[$row[$m_i]])) $all_users[$row[$m_i]]=1;
+              $new_row['To']=$row[$m_i];
+              $new_row['Type']="mention only";
+              $new_row['Position']=$i;
+      		    fputcsv($fp, $new_row);
+      		  }
+      		$indx++;
+          if ($indx>=$max_kumu_size) break;
+  	     }
+      fclose($fp);
+      echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."mentions.csv'>file ($table"."_"."mentions.csv)</a><br>\n";
+
+echo "\n---\nResponse tweets"; print_r($all_responses);
+echo "\n---\nMentions tweets:\n"; print_r($all_mentions);
+echo "\n---\nUsers:\n"; print_r($all_users);
+
+      echo "\nKumu: Creating elements for users...";
+      $first_line=array("Label","Image","User Verified","Link","Bio","Language","Location","Tweets","Followers",
+		  "Following","Favorites","Lists","Created Date","Profile Page");
+      $fp=fopen("tmp/kumu/$table"."_"."users.csv",'w');
+      fputcsv($fp, $first_line);
+
+      $query= "SELECT LOWER(user_screen_name),user_image_url,user_verified,user_url,user_bio,user_lang,user_location,user_tweets,user_followers,user_following,user_favorites,user_lists,user_created FROM users_".$table;
+
+      if ($result = $link->query($query))
+          {
+            if (!$result->num_rows) { echo "No results in the database matched your query.<br>\n";  }
+            $total=$result->num_rows;
+          }
+      else die("Error in query: ". $link->error.": $query");
+
+      while ($row = $result->fetch_array(MYSQLI_NUM))
+        {
+          if (!isset($all_users[$row[0]])) continue;
+      		$row[13]="https://twitter.com/".$row[0];
+          $row[4]=preg_replace("/[\r\n]+/"," ",$row[4]);
+  		    $row[4]=str_replace("\"","'",$row[4]);
+      		fputcsv($fp, $row);
         }
-    else die("Error in query: ". $link->error.": $query");
-    $i=0;
-    while ($row = $result->fetch_assoc())
-      {
-        
-$row['mentions']=preg_replace("/\s+/"," ",$row['mentions']);
-$row['mentions']=str_replace(" ","|",trim($row['mentions']));
-$row['hashtags']=preg_replace("/\s+/"," ",$row['hashtags']);
-$row['hashtags']=str_replace(" ","|",trim($row['hashtags']));
-
-if ($row['media_links'])
-   {
-        $row['media_links']=preg_replace("/\s+/"," ",$row['media_links']);
-//echo "ml:\n".$row['media_links']."\n";
-        $row['media_links']=str_replace(' ','"},{"url":"',trim($row['media_links']));
-        $row['media_links']='[{"url":"'.$row['media_links'].'"}]';
-//echo "ml:\n".$row['media_links']."\n";
-   }
-if ($row['other_links'])
-   {
-        $row['other_links']=preg_replace("/\s+/"," ",$row['other_links']);
-//echo "ol:\n".$row['other_links']."\n";
-        $row['other_links']=str_replace(' ','"},{"url":"',trim($row['other_links']));
-        $row['other_links']='[{"url":"'.$row['other_links'].'"}]';
-//echo "ol:\n".$row['other_links']."\n";
-   }
-$row['sources']=preg_replace("/\s+/","_",$row['sources']);
-$row['sources']=str_replace(" ","|",trim($row['sources']));
-$row['user_image_url']=str_replace("_normal.jpg","_400x400.jpg",$row['user_image_url']);
-$row[13]=$row['user_screen_name'];
-$row['tweets_total']=log($row['tweets_total']);
-if ($row['retweets_total']>0) $row['retweets_total']=log($row['retweets_total']);
-
-$row['user_bio']=str_replace("@","[at]",$row['user_bio']);
-$row['user_bio']=str_replace("|",",",$row['user_bio']);
-
-//print_r($row); exit;
-if ($i<=1000) fputcsv($fp1, $row);
-fputcsv($fp2,$row);
-$i++;
-if ($i==2000) break;
+     fclose($fp);
+     echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."users.csv'>file ($table"."_"."users.csv)</a><br>\n";
 }
-fclose($fp1); fclose($fp2);
-echo "Mappr: Saved CSV <a href='mappr/mappr_".$table."_"."top_2000_full.csv'>file ($table"."_"."top_2000_full.csv)</a><br>\n";
-*/
-/***************************************************************************/
-/*
-echo "\nMappr: Creating top 2000 & 5000 nodes for Mappr (without duplicates)...";
-$first_line=array("id","full_name","Is_user_verified","user_location","user_language","user_bio","user_image_url","tweets_total","retweets_total",
-          "mentions","hashtags","media_urls","other_urls","sources","profile_url");
-$fp1=fopen("mappr/mappr_".$table."_"."top_2000.csv",'w');
-$fp2=fopen("mappr/mappr_".$table."_"."top_5000.csv",'w');
-fputcsv($fp1, $first_line);
-fputcsv($fp2, $first_line);
-
-$link->query("SET SESSION group_concat_max_len = 1000000");
-
-$query= "select LOWER(user_screen_name), user_name, user_verified, user_location, user_lang, user_bio, user_image_url, count(tweet_id) as tweets_total, sum(retweets) as retweets_total, group_concat(distinct user_mentions SEPARATOR ' ') as mentions, group_concat(distinct hashtags SEPARATOR ' ') as hashtags,group_concat(distinct media_link SEPARATOR ' ') as media_links, group_concat(distinct expanded_links SEPARATOR ' ') as other_links, group_concat(distinct source SEPARATOR ' ') as sources from $table group by user_screen_name order by sum(retweets) desc";
-
-    if ($result = $link->query($query))
-        {
-          if (!$result->num_rows) { echo "No results in the database matched your query.<br>\n";  }
-          $total=$result->num_rows;
-        }
-    else die("Error in query: ". $link->error.": $query");
-    $i=0;
-    while ($row = $result->fetch_assoc())
-      {
-        $row['mentions']=preg_replace("/\s+/"," ",$row['mentions']);
-        $row['mentions']=str_replace(" ","|",trim($row['mentions']));
-        $row['hashtags']=preg_replace("/\s+/"," ",$row['hashtags']);
-        $row['hashtags']=str_replace(" ","|",trim($row['hashtags']));
-
-        if ($row['media_links'])
-           {
-                $row['media_links']=preg_replace("/\s+/"," ",$row['media_links']);
-//echo "ml:\n".$row['media_links']."\n";
-                $row['media_links']=str_replace(' ','"},{"url":"',trim($row['media_links']));
-                $row['media_links']='[{"url":"'.$row['media_links'].'"}]';
-//echo "ml:\n".$row['media_links']."\n";
-           }
-        if ($row['other_links'])
-           {
-                $row['other_links']=preg_replace("/\s+/"," ",$row['other_links']);
-//echo "ol:\n".$row['other_links']."\n";
-                $row['other_links']=str_replace(' ','"},{"url":"',trim($row['other_links']));
-                $row['other_links']='[{"url":"'.$row['other_links'].'"}]';
-//echo "ol:\n".$row['other_links']."\n";
-           }
-        $row['sources']=preg_replace("/\s+/","_",$row['sources']);
-        $row['sources']=str_replace(" ","|",trim($row['sources']));
-        $row['user_image_url']=str_replace("_normal.jpg","_400x400.jpg",$row['user_image_url']);
-        $row[13]=$row['user_screen_name'];
-	$row['user_bio']=str_replace("@","[at]",$row['user_bio']);
-	$row['user_bio']=str_replace("|",",",$row['user_bio']);
-	$row['tweets_total']=log($row['tweets_total']);
-	if ($row['retweets_total']>0) $row['retweets_total']=log($row['retweets_total']);
-
-        if ($i<=2000) fputcsv($fp1, $row);
-        fputcsv($fp2,$row);
-        $i++;
-        if ($i==5000) break;
-      }
-fclose($fp1); fclose($fp2);
-echo "Mappr: Saved CSV <a href='mappr/mappr_".$table."_"."top_2000.csv'>file ($table"."_"."top_2000.csv)</a><br>\n";
-echo "Mappr: Saved CSV <a href='mappr/mappr_".$table."_"."top_5000.csv'>file ($table"."_"."top_5000.csv)</a><br>\n";
-*/
- }
 
 function update_cases_table($mode)
       {
@@ -1160,71 +888,208 @@ function update_cases_table($mode)
         $result=$link->query($query);if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
       }
 
-function getapi_record($getfield)
-      {
-//echo "start getapi_record\n";
+function cUrlGetData($url)
+ {
+   global $twitter_api_settings; global $limit_remaining; global $limit_reset; global $full_header;
+#sandbox token
+	$token="Bearer ".$twitter_api_settings['bearer'];
 
-        global $twitter_api_settings; global $last_setting;
-//print_r($postfields); //exit;
-        $twitter = new TwitterAPIExchange($twitter_api_settings[$last_setting]);
-//echo "-\n"; print_r($getfield); echo "-\n";
-    //exit;
-        $response=$twitter->setGetfield($getfield)->buildOauth("https://api.twitter.com/1.1/search/tweets.json", "GET")->performRequest();
-        $record=json_decode($response);
-//echo "\n"; print_r($record); echo "\n"; //exit;
-        $error=$record->errors;
-        $error=$error[0];
-        if($error)
-          {
-            if ($error->code==88)
-              {
-                  echo "\nError 88: Rate exceeded, waiting for 5 minutes to continue with $table\n";
-                  for ($k=4; $k>=0; $k--)
-                   {
-                     echo ($k)." minutes remaining...\n";
-                     sleep(60);
-                   }
-                  $last_setting=$last_setting+1;
-                  if ($last_setting>sizeof($twitter_api_settings)-1) $last_setting=0;
-                  $response=getapi_record($getfield);
-              }
-            else
+#academic token
+#    	$token="Bearer AAAAAAAAAAAAAAAAAAAAAKGfgAAAAAAADOYTT8XoXgcQ4e48zcr%2FYnoZv6g%3DokDOzVRPl58vp48OzxBakZQ83LnULG2WlG1kLoVAKsPfn6Q09l";
+
+  $ch = curl_init( $url );
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+	curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+	   'Content-Type: application/json',
+	   'Authorization: '.$token
+     ));
+
+  curl_setopt($ch, CURLOPT_HEADER, 1);
+
+  $response = curl_exec( $ch );
+
+  $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+  $full_header = substr($response, 0, $header_size);
+  $data = substr($response, $header_size);
+
+  $matches = array();
+  preg_match('/x-rate-limit-remaining: ([0-9]+)[\s]+x-rate-limit-reset: (.+)/', $full_header, $matches);
+
+  $limit_remaining=$matches[1];
+  $limit_reset=$matches[2];
+
+  $err     = curl_errno( $ch );
+  $errmsg  = curl_error( $ch );
+  $info  = curl_getinfo( $ch );
+
+	if ($err) {
+    	echo 'Error:' . curl_error($ch);
+	}
+
+	curl_close($ch);
+
+	return $data;
+}
+
+
+function complete_url($qry)
+ {
+   global $start_time; global $end_time; global $max_per_page;
+   global $since_id; global $until_id; global $next_token;
+   global $twitter_api_settings; global $table; global $link; global $fresh_start;
+
+	$fields="tweet.fields=created_at,author_id,public_metrics,entities,geo,in_reply_to_user_id,lang,referenced_tweets,attachments,context_annotations,source,conversation_id,withheld,possibly_sensitive&place.fields=contained_within,country,country_code,full_name,geo,id,name,place_type&user.fields=created_at,public_metrics,description,entities,id,location,name,pinned_tweet_id,profile_image_url,protected,url,username,verified,withheld&media.fields=duration_ms,height,media_key,preview_image_url,public_metrics,type,url,width&expansions=author_id,referenced_tweets.id,in_reply_to_user_id,attachments.media_keys,geo.place_id,entities.mentions.username,referenced_tweets.id.author_id";
+
+  $query="SELECT status FROM cases where id='$table'";
+  $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
+  $status = $result->fetch_assoc();
+
+//die ("status:(".$status['status'].")");
+
+  if ($fresh_start)
+    {
+      if ($status['status']!="completed")
+        {
+          $query= "SELECT tweet_id,date_time from $table WHERE is_retweet<>1 order by tweet_id ASC";
+          if ($result = $link->query($query)) { if (!($result->num_rows)) $oldest_tweet_id=""; }
+          else die("Error in query: ". $link->error.": $query");
+          $row = $result->fetch_assoc();
+
+          if ($row)
             {
-              echo "Error getapi_record: code: ".$error->code.", message: ".$error->message."\n";
-              exit(); return "";
-	    }
-          }
-//        echo $response; exit;
-        return $response;
+              $oldest_tweet_id=$row['tweet_id'];
+              $oldest_tweet_time=$row['date_time'];
+
+              if ($start_time) $st=str_replace(".00Z","",str_replace("T"," ",$start_time));
+              else { $st = new DateTime(gmdate("Y-m-d H:i:s")); $st->modify('-7 day'); $st=$st->format('Y-m-d H:i:s'); }
+              if ($oldest_tweet_time>$st)
+                {
+    //                $until_id="&until_id=$oldest_tweet_id";
+                    $end_time=str_replace(" ","T",$oldest_tweet_time).".00Z";
+                    note("Getting tweets before ".$oldest_tweet_time."\n");
+                }
+            }
+        }
+      else
+        {
+          $query= "SELECT tweet_id,date_time from $table WHERE is_retweet<>1 order by tweet_id DESC";
+          if ($result = $link->query($query)) { if (!($result->num_rows)) $oldest_tweet_id=""; }
+          else die("Error in query: ". $link->error.": $query");
+          $row = $result->fetch_assoc();
+
+          if ($row)
+            {
+              $newest_tweet_id=$row['tweet_id'];
+              $newest_tweet_time=$row['date_time'];
+
+              if ($end_time) $et=str_replace(".00Z","",str_replace("T"," ",$end_time));
+              else { $et = new DateTime(gmdate("Y-m-d H:i:s")); $et=$et->format('Y-m-d H:i:s'); }
+
+              if ($newest_tweet_time<$et)
+                {
+        //                      $since_id="&since_id=$newest_tweet_id";
+                  $start_time=str_replace(" ","T",$newest_tweet_time).".00Z";
+                  note("Continuing to get tweets posted after $newest_tweet_id at ".$newest_tweet_time."\n");
+                }
+            }
+        }
+      update_cases_table("started");
+      $fresh_start=false;
+    }
+
+  if (!$twitter_api_settings['is_premium']) $search_mode="recent";
+  else $search_mode="all";
+
+  $period="";
+  if ($start_time) $period="&start_time=$start_time";
+  if ($end_time) $period=$period."&end_time=$end_time";
+  $url="https://api.twitter.com/2/tweets/search/$search_mode?query=$qry&max_results=$max_per_page$next_token$until_id$since_id$period&$fields";
+
+  echo "\nURL:\n----\n$url\n----\n";
+	return $url;
+ }
+
+function getapi_record($getfield)
+  {
+    global $twitter_api_settings; global $last_setting;
+    global $limit_remaining; global $limit_reset; global $full_header;
+
+    if ($limit_remaining==0)
+      {
+          echo "Rate exceeded, resuming in ".(string)($limit_reset-time())." seconds\n";
+          sleep($limit_reset-time());
       }
 
-function GetRealURL( $url )
-      {
-         $options = array(
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADER         => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_ENCODING       => "",
-            CURLOPT_USERAGENT      => "spider",
-            CURLOPT_AUTOREFERER    => true,
-            CURLOPT_CONNECTTIMEOUT => 120,
-            CURLOPT_TIMEOUT        => 120,
-            CURLOPT_MAXREDIRS      => 10,
-         );
-          $ch      = curl_init( $url );
-          curl_setopt_array( $ch, $options );
-          $content = curl_exec( $ch );
-          $err     = curl_errno( $ch );
-          $errmsg  = curl_error( $ch );
-          $header  = curl_getinfo( $ch );
-          curl_close( $ch );
-    //      print_r($header);
-          if ($header['header_size'])
-            return $header['url']." ".$header['content_type'];
-          return "";
-       }
+    $url=complete_url($getfield); global $last_setting;
 
-function url_get_contents($url) {
+    $response = cUrlGetData($url);
+    $record=json_decode($response);
+
+    if (isset($record->status))
+      {
+        echo "Status error getapi_record: \n";
+        note("\n---Header-----\n$full_header\n-------\n");
+        print_r($record);
+        node("1errors: "); var_dump($response);
+        return "";
+      }
+
+    if (isset($record->errors))
+      {
+        echo "Error getapi_record: \n";
+        var_dump($record->errors);
+        foreach ($record->errors as $error)
+            {
+              if ($error->parameters->query[0]) { echo "Query: ".$error->parameters->query[0]."\n"; }
+              echo $error->title."\n";
+              echo $error->message."\n";
+              echo $error->detail."\n";
+            }
+      }
+
+    if (isset($record->meta->result_count))
+      {
+        if ($record->meta->result_count===0)
+          {
+            echo "The rearch returned no results.";
+            return;
+          }
+        else
+          {
+            echo "The rearch returned ".$record->meta->result_count." results.\n";
+            return $record;
+          }
+      }
+  }
+
+function GetRealURL( $url )
+  {
+     $options = array(
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER         => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_ENCODING       => "",
+        CURLOPT_USERAGENT      => "spider",
+        CURLOPT_AUTOREFERER    => true,
+        CURLOPT_CONNECTTIMEOUT => 120,
+        CURLOPT_TIMEOUT        => 120,
+        CURLOPT_MAXREDIRS      => 10,
+     );
+      $ch      = curl_init( $url );
+      curl_setopt_array( $ch, $options );
+      $content = curl_exec( $ch );
+      $err     = curl_errno( $ch );
+      $errmsg  = curl_error( $ch );
+      $header  = curl_getinfo( $ch );
+      curl_close( $ch );
+  //      print_r($header);
+      if ($header['header_size'])
+        return $header['url']." ".$header['content_type'];
+      return "";
+   }
+
+function url_get_contents($url)
+  {
     global $failed_proxy;
     if (!function_exists('curl_init')) die('CURL is not installed!');
     $header = array(
@@ -1247,149 +1112,22 @@ function url_get_contents($url) {
     if(curl_errno($ch))
      {
       if (!$failed_proxy)
-	{
-	   $failed_proxy=1;
-	   echo "\nProxy connection failed... Trying without proxy\n";
-           curl_close($ch);
-           url_get_contents($url);
-	}
+      	{
+      	   $failed_proxy=1;
+      	   echo "\nProxy connection failed... Trying without proxy\n";
+                 curl_close($ch);
+                 url_get_contents($url);
+      	}
      }
     return $output;
-}
-
-function put_in_database($tweet)
-{
-//  print_r($tweet); exit;
-  global $i; global $mode; global $mysql_db; global $table; global $verbose;
-  global $added; global $skipped; global $link;
-//die("\n[$i]\n");
-  $query = "$mode `$mysql_db`.`$table` (`index_on_page`,`tweet_id`) VALUES ($i, "."'".$tweet['tweet_id']."')";
-       if (!($result = $link->query($query))) die("Error in query: ". $link->error.": $query\n");
-       elseif ($verbose==1)
-        {
-          if ($link->affected_rows==1)
-          {
-            echo "added\n";
-            $added++;
-          }
-          elseif ($link->affected_rows==0)
-          {
-            echo "skipped\n";
-            $skipped++;
-          }
-        }
-//        exit;
   }
 
-  function get_last_line($file)
-  {
-    $line = '';
-    if (!file_exists($file)) { echo "File ($file) doesn't exist\n"; return ""; }
-    $f = fopen($file, 'r');
-    $cursor = -1;
-    fseek($f, $cursor, SEEK_END);
-    $char = fgetc($f);
-    while ($char === "\n" || $char === "\r")
-      {
-        fseek($f, $cursor--, SEEK_END);
-        $char = fgetc($f);
-      }
-    while ($char !== false && $char !== "\n" && $char !== "\r")
-      {
-        $line = $char . $line;
-        fseek($f, $cursor--, SEEK_END);
-        $char = fgetc($f);
-     }
-    $line=trim($line);
-    return $line;
-  }
+ function note($line)
+    {
+          echo $line;
+    }
 
-function del_last_line($file,$record_exists)
-{
-  $lines = file($file);
-  $last = sizeof($lines) - 1 ;
-  unset($lines[$last]);
-  // write the new data to the file
-  $fp = fopen($file, 'w');
-  $temp=implode('', $lines);
-  $tmp=preg_replace("/no more tweets\n/","",$tmp);
-  fwrite($fp, $temp);
-  fclose($fp);
-//  die("seeking ($record_exists) in $file \n--\n$temp\n--\n) sp:".strpos($temp,$record_exists));
-//  exit;
-  if (strpos($temp,$record_exists)===false) return 1;
-  else return -1;
-}
-  function note($line)
-  {
-        echo $line;
-  }
-
-  function extract_and_store_data2($u)
-  {
-    global $i;
-//    if ($u) { print_r($u); exit; }
-      $user=array();
-      if ($u->id) $user['user_id']=$u->id;
-      if ($u->screen_name) $user['user_screen_name']=$u->screen_name;
-      if ($u->name) $user['user_name']=$u->name;
-      if ($u->location) $user['user_location']=$u->location;
-      if ($u->followers_count===0 || $u->followers_count) $user['user_followers']=$u->followers_count;
-      if ($u->following_count===0 || $u->following_count) $user['user_following']=$u->following_count;
-      if ($u->friends_count===0 || $u->friends_count) $user['user_following']=$u->friends_count;
-      if ($u->protected) $user['user_protected']=$u->protected;
-      else  $user['user_protected']=0;
-      if ($u->listed_count===0 || $u->listed_count) $user['user_lists']=$u->listed_count;
-      if (preg_match("/([A-Za-z]+) ([\d]+) ([\d]+\:[\d]+\:[\d]+) \+0000 ([\d]+)/si",$u->created_at,$cr))
-        {
-          $datetime=$cr[2]." ".$cr[1]." ".$cr[4]." ".$cr[3];
-          $user['user_created']=date('Y-m-d H:i:s',strtotime($datetime));
-        }
-      if ($u->favourites_count===0 || $u->favourites_count) $user['user_favorites']=$u->favourites_count;
-      if ($u->utc_offset) $user['user_utc_offset']=$u->utc_offset;
-      if ($u->time_zone) $user['user_timezone']=$u->time_zone;
-      if ($u->geo_enabled) $user['user_geo_enabled']=1; else $user['user_geo_enabled']=0;
-      if ($u->verified) $user['user_verified']=$u->verified; else $user['user_verified']=0;
-      if ($u->statuses_count===0 || $u->statuses_count) $user['user_tweets']=$u->statuses_count;
-      if ($u->lang) $user['user_lang']=$u->lang;
-      if ($u->description) $user['user_bio']=$u->description;
-      if ($u->profile_image_https) $user['user_image_url']=$u->profile_image_https;
-      if ($u->entities)
-       {
-         $en=$u->entities;
-         if ($en->url)
-          {
-            $urls=$en->url;
-            if (sizeof($urls)>0)
-            {
-              foreach($urls as $url1)
-               {
-                 foreach ($url1 as $url2)
-                   {
-                    $user['user_url']=$user['user_url']." ".$url2->expanded_url;
-                   }
-               }
-              $user['user_url']=trim($user['user_url']);
-            }
-          }
-       }
-      if (!$user['user_url'] && $u->url) { $user['user_url']=$u->url; }
-      if ($u->withheld_in_countries) $user['user_withheld_in_countries']=$u->withheld_in_countries;
-      if ($u->withheld_scope) $user['user_withheld_scope']=$u->withheld_scope;
-      /******resume twitter data******/
-      if ($u)
-       {
-  //      print_r($user); exit;
-        put_in_database2($user);
-       }
-      else
-        {
-          echo "No user found: ".$user['user_screen_name']."\n";
-          sleep(2);
-        }
-      }
-
-  function put_in_database2($user)
+function put_user_in_database($user)
     {
       global $table; global $i; //global $tweet_updated_rows; global $user_updated_rows;
       global $link;
@@ -1411,75 +1149,11 @@ function del_last_line($file,$record_exists)
            }
        }
       $query="$insert_part ($names) values ($values) $update_part $query;";
-  //       echo "\nuser query:\n\n$query\n"; exit;
+//echo "\nuser query:\n\n$query\n"; //exit;
      $result = $link->query($query);
      if (!$result) die("Invalid query: " . $link->sqlstate. "<hr>$query<hr>");
   //   if ($link->affected_rows>$a_rows) $user_updated_rows++;
   //   echo "\n---\n".$tweet_updated_rows." ".$user_updated_rows." (".$link->affected_rows.")\n---\n";
-    }
-
-  function getapi_record2($getfield)
-    {
-      global $records; global $twitter_api_settings; global $link;
-      global $last_setting;
-  //    print_r($postfields);
-      $twitter = new TwitterAPIExchange($twitter_api_settings[$last_setting]);
-  //    echo "-\n"; print_r($postfields); echo "-\n";
-  //exit;
-      $response=$twitter->setGetfield($getfield)->buildOauth("https://api.twitter.com/1.1/search/tweets.json", "GET")->performRequest();
-      $record=json_decode($response);
-      $error=$record->errors;
-      $error=$error[0];
-      if($error)
-        {
-  //echo "error"; exit;
-          if ($error->code==88)
-            {
-                echo "\nError 88: Rate exceeded, waiting for 15 minutes to continue with $table\n";
-                for ($k=15; $k>=0; $k--)
-                 {
-                   echo ($k)." minutes remaining...\n";
-                   sleep(62);
-                 }
-                $response=getapi_record2($getfield);
-            }
-          elseif ($error->code==17)
-           {
-              $screen_names=explode(",",$getfield['screen_name']);
-  //            print_r($screen_names); exit;
-              foreach ($screen_names as $sn)
-                {
-  //                print_r($sn); exit;
-  //                echo "https://twitter.com/".$sn."\n"; continue;
-  //                echo file_get_contents("https://twitter.com/".$sn); exit;
-  //echo get_http_response_code("https://twitter.com/".$sn); exit;
-                  $header=get_headers("https://twitter.com/".$sn);
-  //print_r($header);
-                  if (strpos($header[0]," 404 ")>0)
-                    {
-                      $query="UPDATE `users_"."$table` SET `is_deleted`='1' where user_screen_name='".$sn."'";
-                      $result3 = $link->query($query);
-                      if (!$result3) die("Invalid query: " . $link->sqlstate. "<hr>$query<hr>");
-                      echo $sn.": The account has been deleted and marked as such in DB\n";
-                    }
-                  elseif ($header[7]=="location: https://twitter.com/account/suspended")
-                    {
-                      $query="UPDATE `users_"."$table` SET `is_suspended`='1' where user_screen_name='".$sn."'";
-                      $result3 = $link->query($query);
-                      if (!$result3) die("Invalid query: " . $link->sqlstate. "<hr>$query<hr>");
-                      echo $sn.": The account has been suspended and marked as such in DB\n";
-                    }
-                }
-  //exit;
-            }
-          else
-           {
-            echo "Error: getapi_record2: code: ".$error->code.", message: ".$error->message."\n";
-            exit();
-           }
-        }
-  //    echo $response; exit;
-      return $response;
     }
 
 function draw_network($table)
@@ -1489,52 +1163,78 @@ function draw_network($table)
     $minimum_strength=0;
     $limit=10;
 
-  //$minimum_followers=500;
-
     update_kumu_files($table);
     echo "\nstart drawing\n";
 
-echo "START DRAWING<br>\n";
-            connect_mysql();
-            $qry= "SELECT user_id,user_screen_name,user_name,user_followers,user_verified FROM users_".$table." "; /*,user_image_url,user_location*/
-            $condition="WHERE user_screen_name is not null" ;
-//            if ($minimum_followers) $condition=$condition." and user_followers>=$minimum_followers";
+    echo "START DRAWING<br>\n";
+    connect_mysql();
+    $qry= "SELECT user_id,user_screen_name,user_name,user_followers,user_verified FROM users_".$table." "; /*,user_image_url,user_location*/
+    $condition="WHERE user_screen_name is not null" ;
 
-            $query = "$qry $condition order by user_followers desc";
+    $query = "$qry $condition order by user_followers desc";
 
 //echo "($query)\n";
-            if ($result = $link->query($query))
-                {
-                  if (!$result->num_rows) echo "No results in the database matched your query.<br>\n";
-                  $total=$result->num_rows;
-                }
-            else die("Error in query: ". $link->error.": $query");
-/*
-            if ($total>300000) $minimum_strength=3;
-            if ($total>200000) $minimum_strength=2;
-            if ($total>100000) $minimum_strength=1;
-*/
-            $nodes=""; $i=0; $all_nodes=array();
-            while ($row = $result->fetch_array())
-              {
-        //        if ($row[4]==1) $color="#FC0404"; else $color="#81BEF7";
-//                if ($minimum_followers) { if ($row[3]<$minimum_followers) continue; }
-//echo "$i) working on ${row[0]}<br>\n";
-		$tmpnode=strtolower($link->real_escape_string($row[1]));
-                $nodes=$nodes."g.nodes.push({ id: '${row[0]}', label: '$tmpnode', x: Math.random(), y: Math.random(), size: ".($row[3]).", color: 'FF8000' });\n";
-                $all_nodes1[$row[0]]=$tmpnode;
-//                array_push($all_nodes,$row[0]);
-                $i++;
-        //              if ($i==10) break;
-              }
+    if ($result = $link->query($query))
+        {
+          if (!$result->num_rows) echo "No results in the database matched your query.<br>\n";
+          $total=$result->num_rows;
+        }
+    else die("Error in query: ". $link->error.": $query");
+
+    $nodes=""; $i=0; $all_nodes=array();
+    while ($row = $result->fetch_array())
+      {
+        $tmpnode=strtolower($link->real_escape_string($row[1]));
+        $nodes=$nodes."g.nodes.push({ id: '${row[0]}', label: '$tmpnode', x: Math.random(), y: Math.random(), size: ".($row[3]).", color: 'FF8000' });\n";
+        $all_nodes1[$row[0]]=$tmpnode;
+        $i++;
+      }
 echo "\n\nSTEP 1 (users) DONE\n\n";
-//echo "done1"; exit;
-//print_r($all_nodes1); exit;
-      $total_nodes=$i;
-      $qry= "select user_id,user_screen_name,in_response_to_user_id,count(tweet_id) from user_mentions_".$table;
-          $condition="WHERE in_response_to_user_screen_name is not null";
-          $query = "$qry $condition group by concat(user_id, ' ', in_response_to_user_id) order by count(tweet_id) desc";
-//echo "\n--\n$qry\n--\n";
+
+    $total_nodes=$i;
+    $qry= "select user_id,user_screen_name,in_response_to_user_id,count(tweet_id) from user_mentions_".$table;
+    $condition="WHERE in_response_to_user_screen_name is not null";
+    $query = "$qry $condition group by concat(user_id, ' ', in_response_to_user_id) order by count(tweet_id) desc";
+    if ($result = $link->query($query))
+      {
+        if (!$result->num_rows) echo "No results in the database matched your query.<br>\n";
+        $total=$result->num_rows;
+      }
+    else die("Error in query: ". $link->error.": $query");
+    if ($result->num_rows)
+     {
+//echo $result->num_rows." DB Records found\n";
+      $all_nodes=array_keys($all_nodes1);
+      $header="source,target,value\n";
+      $edges=array(); $edges[0]=$header; $edges[1]=$header; $edges[2]=$header;
+      $edges[3]=$header; $edges[4]=$header; $edges[5]=$header;
+      $connected_nodes=array();
+      $ii=0;
+      while ($row = $result->fetch_array())
+       {
+        $ii++;
+        for ($i=$maximum_strength; $i>$minimum_strength; $i--)
+          {
+            if ($maximum_strength) { if ($row[3]<$i) continue; }
+            if (!in_array($row[0],$all_nodes)) continue;
+            if (!in_array($row[2],$all_nodes)) continue;
+            $edges[$i]=$edges[$i].$all_nodes1[$row[0]].",".$all_nodes1[$row[2]].",".$row[3]."\n";
+          }
+//                  echo "- $ii) working on ${row[0]} (i:$i)<br>\n";
+       }
+      for ($i=$maximum_strength; $i>$minimum_strength; $i--)
+        {
+          file_put_contents("tmp/network/$table"."_"."$i.csv",$edges[$i]);
+
+          echo "Saved CSV <a href='tmp/network/$table"."_"."$i.csv'>file ($table"."_"."$i.csv)</a>";
+        }
+      }
+      echo "\n\nSTEP 2 (replies) DONE\n\n";
+
+      $qry= "select user_screen_name,mention1,mention2,mention3,mention4,mention5,
+             mention6,mention7,mention8,mention9,mention10 from user_mentions_".$table;
+          $condition="WHERE mention1 is not null";
+          $query = "$qry $condition";
       if ($result = $link->query($query))
         {
           if (!$result->num_rows) echo "No results in the database matched your query.<br>\n";
@@ -1543,86 +1243,46 @@ echo "\n\nSTEP 1 (users) DONE\n\n";
       else die("Error in query: ". $link->error.": $query");
       if ($result->num_rows)
        {
-//echo $result->num_rows." DB Records found\n";
-        $all_nodes=array_keys($all_nodes1);
-        $header="source,target,value\n";
-        $edges=array(); $edges[0]=$header; $edges[1]=$header; $edges[2]=$header;
-        $edges[3]=$header; $edges[4]=$header; $edges[5]=$header;
-        $connected_nodes=array();
-        $ii=0;
-        while ($row = $result->fetch_array())
-         {
-          $ii++;
-          for ($i=$maximum_strength; $i>$minimum_strength; $i--)
-            {
-              if ($maximum_strength) { if ($row[3]<$i) continue; }
-              if (!in_array($row[0],$all_nodes)) continue;
-              if (!in_array($row[2],$all_nodes)) continue;
-              $edges[$i]=$edges[$i].$all_nodes1[$row[0]].",".$all_nodes1[$row[2]].",".$row[3]."\n";
-            }
-//                  echo "- $ii) working on ${row[0]} (i:$i)<br>\n";
-         }
-        for ($i=$maximum_strength; $i>$minimum_strength; $i--)
-          {
-            file_put_contents("tmp/network/$table"."_"."$i.csv",$edges[$i]);
-
-            echo "Saved CSV <a href='tmp/network/$table"."_"."$i.csv'>file ($table"."_"."$i.csv)</a>";
-          }
-        }
-echo "\n\nSTEP 2 (replies) DONE\n\n";
-
-              $qry= "select user_screen_name,mention1,mention2,mention3,mention4,mention5,
-                     mention6,mention7,mention8,mention9,mention10 from user_mentions_".$table;
-                  $condition="WHERE mention1 is not null";
-                  $query = "$qry $condition";
-              if ($result = $link->query($query))
-                {
-                  if (!$result->num_rows) echo "No results in the database matched your query.<br>\n";
-                  $total=$result->num_rows;
-                }
-              else die("Error in query: ". $link->error.": $query");
-              if ($result->num_rows)
-               {
-                 $header="source,target,value\n";
-                 $edges=array(); $edges[0]=$header; $edges[1]=$header; $edges[2]=$header;
-                 $edges[3]=$header; $edges[4]=$header; $edges[5]=$header;
-                 $connected_nodes=array();
-                 $ii=0;
+         $header="source,target,value\n";
+         $edges=array(); $edges[0]=$header; $edges[1]=$header; $edges[2]=$header;
+         $edges[3]=$header; $edges[4]=$header; $edges[5]=$header;
+         $connected_nodes=array();
+         $ii=0;
 //echo "\n$query\n<br>";
 //print_r($all_nodes1);
 //exit;
-                 while ($row = $result->fetch_array())
-                  {
-                   for ($kk=1; $kk<=10; $kk++)
-                    {
-                      $row[$kk]=ltrim($row[$kk],'@');
-                      if (!in_array($row[0],$all_nodes1)) continue;
-                      if (!in_array($row[$kk],$all_nodes1)) continue;
-                      if (!$edges[$row[0].",".$row[$kk]]) $edges[$row[0].",".$row[$kk]]=0;
-                      $edges[$row[0].",".$row[$kk]]++;
+         while ($row = $result->fetch_array())
+          {
+           for ($kk=1; $kk<=10; $kk++)
+            {
+              $row[$kk]=ltrim($row[$kk],'@');
+              if (!in_array($row[0],$all_nodes1)) continue;
+              if (!in_array($row[$kk],$all_nodes1)) continue;
+              if (!$edges[$row[0].",".$row[$kk]]) $edges[$row[0].",".$row[$kk]]=0;
+              $edges[$row[0].",".$row[$kk]]++;
 //echo "Adding: ".$row[0].",".$row[$kk]."\n<br>";
-                    }
-                  }
+            }
+          }
 //print_r($edges); exit;
-                $edge_arr=array();
-                for ($i=$maximum_strength; $i>$minimum_strength; $i--) { $edge_arr[$i]=$header; }
-                $edges_keys=array_keys($edges);
-                foreach ($edges_keys as $edg)
-                 {
-                  for ($i=$maximum_strength; $i>$minimum_strength; $i--)
-                     { if ($edges[$edg]>$i) $edge_arr[$i]=$edge_arr[$i].$edg.",".$edges[$edg]."\n"; }
-                 }
+        $edge_arr=array();
+        for ($i=$maximum_strength; $i>$minimum_strength; $i--) { $edge_arr[$i]=$header; }
+        $edges_keys=array_keys($edges);
+        foreach ($edges_keys as $edg)
+         {
+          for ($i=$maximum_strength; $i>$minimum_strength; $i--)
+             { if ($edges[$edg]>$i) $edge_arr[$i]=$edge_arr[$i].$edg.",".$edges[$edg]."\n"; }
+         }
 //print_r($edges_arr); exit;
-                for ($i=$maximum_strength; $i>$minimum_strength; $i--)
-                 {
-                    if (!$edge_arr[$i]) { echo "No $i-level connections\n<br>"; continue; }
-                    file_put_contents("tmp/network/$table"."_mentions_"."$i.csv",$edge_arr[$i]);
-                    echo "Saved CSV <a href='tmp/network/$table"."_mentions_"."$i.csv'>file ($table"."_mentions_"."$i.csv)</a>";
-                 }
-               }
-echo "\n\nSTEP 3 (mentions) DONE\n\n";
-echo "\n\nALL DONE\n\n";
-update_cases_table("completed");
+        for ($i=$maximum_strength; $i>$minimum_strength; $i--)
+         {
+            if (!$edge_arr[$i]) { echo "No $i-level connections\n<br>"; continue; }
+            file_put_contents("tmp/network/$table"."_mentions_"."$i.csv",$edge_arr[$i]);
+            echo "Saved CSV <a href='tmp/network/$table"."_mentions_"."$i.csv'>file ($table"."_mentions_"."$i.csv)</a>";
+         }
+       }
+  echo "\n\nSTEP 3 (mentions) DONE\n\n";
+  echo "\n\nALL DONE\n\n";
+  update_cases_table("completed");
   }
 
 function startswith($haystack, $needle) {

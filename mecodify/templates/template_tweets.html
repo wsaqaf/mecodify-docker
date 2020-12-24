@@ -64,10 +64,10 @@
 													  <div  id="type_of_content" class="slidingDiv2" style="display: block;">
 															<input type="radio" name="content_types" id="all_types" value="all" checked onclick=show_or_hide(document.getElementById('specify_types'),"none")> All types<br>
 															<input type="radio" name="content_types" id="specific_types" value="some" onclick=show_or_hide(document.getElementById('specify_types'),"block")> Specific types<br><br>
-															
+
 <div id="specify_types" style="display:none;">
 																Tweets MUST*:<br>
-														  	
+
 Boolean operator: <select id="bool_op" style='color:black; background-color:white'>
 <option value="AND">AND</option>
 <option value="OR" selected>OR</option>
@@ -75,26 +75,26 @@ Boolean operator: <select id="bool_op" style='color:black; background-color:whit
 </select><br>
 
 <input type="checkbox" id="image_tweets" name="image_tweets" value=1> Include an image<br>
-														  	<input type="checkbox" id="video_tweets" name="video_tweets" value=1> Include a video<br>
-														  	<input type="checkbox" id="link_tweets" name="link_tweets" value=1> Include a link<br>
-																<input type="checkbox" id="user_verified" name="user_verified" value=1> From a verified user<br>
-																<input type="checkbox" id="retweet_tweets" name="retweet_tweets" value=1> Is a retweet<br>
-																<input type="checkbox" id="response_tweets" name="response_tweets" value=1> Is a response<br>
-																<input type="checkbox" id="responded_tweets" name="responded_tweets" value=1> Has a response<br>
+<input type="checkbox" id="video_tweets" name="video_tweets" value=1> Include a video<br>
+<input type="checkbox" id="link_tweets" name="link_tweets" value=1> Include a link<br>
+<input type="checkbox" id="user_verified" name="user_verified" value=1> From a verified user<br>
+<input type="checkbox" id="retweet_tweets" name="retweet_tweets" value=1> Is a retweet<br>
+<input type="checkbox" id="quoting_tweets" name="quoting_tweets" value=1> Is a quote tweet<br>
+<input type="checkbox" id="response_tweets" name="response_tweets" value=1> Is a response<br>
+<input type="checkbox" id="responded_tweets" name="responded_tweets" value=1> Has a response<br>
 
-<input type="checkbox" id="quoting_tweets" name="quoting_tweets" value=1> Quotes another tweet<br>
-																<input type="checkbox" id="mentions_tweets" name="mentions_tweets" value=1> Has mentions<br>
+<input type="checkbox" id="mentions_tweets" name="mentions_tweets" value=1> Has mentions<br>
 
 Has any of those hashtags:<br><input type="text" id="any_hashtags" name="any_hashtags" size=30 style="color:#4F471F !important;"><br>
-																Has any of those keywords:<br><input type="text" id="any_keywords" name="any_keywords" size=30 style="color:#4F471F !important;"><br>
-																Has all of those keywords:<br><input type="text" id="all_keywords" name="all_keywords" size=30 style="color:#4F471F !important;"><br>
-																Has this exact phrase:<br><input type="text" id="exact_phrase" name="exact_phras=" size=30 style="color:#4F471F !important;"><br>
-																
+Has any of those keywords:<br><input type="text" id="any_keywords" name="any_keywords" size=30 style="color:#4F471F !important;"><br>
+Has all of those keywords:<br><input type="text" id="all_keywords" name="all_keywords" size=30 style="color:#4F471F !important;"><br>
+Has this exact phrase:<br><input type="text" id="exact_phrase" name="exact_phras=" size=30 style="color:#4F471F !important;"><br>
+
 Sent from those users: <br><input type="text" id="from_accounts" name="from_accounts" placeholder="@user1 @user2..." size=30 style="color:#4F471F !important;"><br>
 In reply to this tweet id: <br><input type="text" id="in_reply_to_tweet_id" name="in_reply_to_tweet_id" placeholder="<must be the tweet id number>" size=30 style="color:#4F471F !important;"><br>
 
-																Any of those locations (if known)<br><input type="text" id="location" name="location" size=30 style="color:#4F471F !important;"><br>
-																Was retweeted at least this many times<br><input type="text" id="min_retweets" name="min_retweets" size=5 style="color:#4F471F !important;"><br>
+Any of those locations (if known)<br><input type="text" id="location" name="location" size=30 style="color:#4F471F !important;"><br>
+Was retweeted at least this many times<br><input type="text" id="min_retweets" name="min_retweets" size=5 style="color:#4F471F !important;"><br>
 															</div>
 													  </div>
 													</div>
@@ -161,7 +161,7 @@ In reply to this tweet id: <br><input type="text" id="in_reply_to_tweet_id" name
 										<ul style="display: block; font-size:14px; font-weight:normal;">
 															<li class="">
 																<div id="type_of_content" class="slidingDiv5" style="display: block;">
-																<input type="radio" name="languages" id="all_languages" value="all" checked onclick=show_or_hide(document.getElementById('specify_lang'),"none")> Tweets in all languages<br>
+																<input type="radio" name="languages" id="all_languages" value="" checked onclick=show_or_hide(document.getElementById('specify_lang'),"none")> Tweets in all languages<br>
 																<input type="radio" name="languages" id="only_eng" value="en" onclick=show_or_hide(document.getElementById('specify_lang'),"none")> Tweets in English only<br>
 																<input type="radio" name="languages" id="specific_langs" value="some" onclick=show_or_hide(document.getElementById('specify_lang'),"block")> Tweets in specific languages<br><br>
 															<div id="specify_lang" style="display:none;">
@@ -181,7 +181,7 @@ In reply to this tweet id: <br><input type="text" id="in_reply_to_tweet_id" name
 															<li class="">
 																<div id="type_of_content" class="slidingDiv6" style="display: block;">
 																A 'source' is software used to post the tweet<br>
-																<input type="radio" name="sources" id="all_clients" value="all" checked onclick=show_or_hide(document.getElementById('specify_client'),"none")> All<br>
+																<input type="radio" name="sources" id="all_clients" value="" checked onclick=show_or_hide(document.getElementById('specify_client'),"none")> All<br>
 																<input type="radio" name="sources" id="only_web" value="only_web" onclick=show_or_hide(document.getElementById('specify_client'),"none")> Web (Windows, Mac, Linux...)<br>
 																<input type="radio" name="sources" id="only_mobile" value="only_mobile" onclick=show_or_hide(document.getElementById('specify_client'),"none")> Mobile (Android, iPhone, iPad...)<br>
 																<input type="radio" name="sources" id="specific_client" value="some" onclick=show_or_hide(document.getElementById('specify_client'),"block")> Specific sources<br><br>

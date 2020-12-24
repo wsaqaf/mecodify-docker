@@ -119,7 +119,7 @@ if ($row['a'])
 //        if ($row['user_lang']) { if ($languages[$row['user_lang']]) echo "Speaks ".$languages[$row['user_lang']]."<br>\n"; else echo "Speaks ".$row['user_lang']."<br>\n"; }
         echo "</td></tr><tr><td>Joined Twitter:</td><td><b>${row['user_created']}</b></td><tr><td>Contributed</td><td><b>".number_format($row['user_tweets'])." tweets</b></td></tr>\n";
         echo "<tr><td>Followers</td><td><b>".number_format($row['user_followers'])."</b></td></tr><tr><td>Following</td><td><b>".number_format($row['user_following'])."</b></td></tr>\n";
-        echo "<tr><td>Favorites</td><td><b>".number_format($row['user_favorites'])."</b></td></tr><tr><td>Lists</td><td><b>".number_format($row['user_lists'])."</b></td></td>\n";
+        echo "<tr><td>Lists</td><td><b>".number_format($row['user_lists'])."</b></td></td>\n";
         echo "</table><br>In connection to <b> ".$cases[$table]['name'];
         echo "<table style='font-size:10pt; width:600px; background-color:#FFFFFF; border:1px; margin-left:30px'><tr><td>Tweets</td><td><b>".number_format($row['a'])."</b></td></tr>";
         echo "<tr><td>Retweets by others</td><td><b>".number_format($row['b'])."</b></td></tr>\n";
@@ -237,7 +237,7 @@ function get_top($type,$limit)
           else
             $qry= "SELECT $table.user_screen_name,sum($table.retweets) AS retweets FROM $table ";
           $condition=preg_replace("/\s*WHERE/i"," AND ",$condition);
-          $condition="WHERE retweets>0 ".$condition." AND (is_retweet<>1)"; 
+          $condition="WHERE retweets>0 ".$condition." AND (is_retweet<>1)";
           $query = "$qry $condition group by $table.user_screen_name order by sum($table.retweets) desc";
         }
     elseif ($type=="responses")
@@ -246,7 +246,7 @@ function get_top($type,$limit)
           $subtitle="Total number of responses sent";
           $yaxis="responses sent";
           $name="Top responding tweeters";
-          if ($_GET['export'])            
+          if ($_GET['export'])
             $qry= "SELECT user_screen_name,user_name AS full_name,count(in_reply_to_user) AS replies,user_verified, user_location, user_lang AS user_language, user_bio,CONCAT('https://twitter.com/',user_screen_name) AS user_twitter_page  FROM $table ";
           else
             $qry= "SELECT user_screen_name,count(in_reply_to_user) AS replies FROM $table ";
@@ -276,10 +276,10 @@ responses_to_tweeter AS repliers,mentions_of_tweeter,user_verified,user_location
           $condition=preg_replace("/\s*WHERE/i"," AND ",$condition);
 	  $condition="WHERE mentions_of_tweeter>0".$condition;
           if ($_GET['export'])
-            $qry= "SELECT user_screen_name, user_name AS full_name, COUNT(tweet_id) AS total_tweets, SUM(retweets) AS total_retweets, SUM(responses) AS total_tweet_replies, responses_to_tweeter, mentions_of_tweeter, user_verified, user_location, user_lang AS user_language, user_bio, CONCAT('https://twitter.com/',user_screen_name) AS user_twitter_page  FROM $table"; 
+            $qry= "SELECT user_screen_name, user_name AS full_name, COUNT(tweet_id) AS total_tweets, SUM(retweets) AS total_retweets, SUM(responses) AS total_tweet_replies, responses_to_tweeter, mentions_of_tweeter, user_verified, user_location, user_lang AS user_language, user_bio, CONCAT('https://twitter.com/',user_screen_name) AS user_twitter_page  FROM $table";
           else
-            $qry= "SELECT user_screen_name,mentions_of_tweeter FROM $table"; 
-          $query = "$qry $condition group by user_screen_name order by mentions_of_tweeter DESC";  
+            $qry= "SELECT user_screen_name,mentions_of_tweeter FROM $table";
+          $query = "$qry $condition group by user_screen_name order by mentions_of_tweeter DESC";
       }
     elseif ($type=="all_mentions")
         {
@@ -302,7 +302,7 @@ responses_to_tweeter AS repliers,mentions_of_tweeter,user_verified,user_location
           $subtitle="Total total number of quoted tweets";
           $yaxis="quoted tweets";
           $name="Top tweeters with quoted tweets";
-          if ($_GET['export'])                        
+          if ($_GET['export'])
             $qry= "SELECT k2.user_screen_name,k2.user_name AS full_name,count(k1.quoted_tweet_id) AS quoted_tweets,k1.user_verified,k1.user_location,k1.user_lang AS user_language,k1.user_bio,CONCAT('https://
 twitter.com/',k1.user_screen_name) AS user_twitter_page FROM $table k1 inner join $table k2 on k2.tweet_id=k1.quoted_tweet_id ";
           else
@@ -317,10 +317,10 @@ twitter.com/',k1.user_screen_name) AS user_twitter_page FROM $table k1 inner joi
             $subtitle="Total number of tweets ".get_period($table);
             $yaxis="tweets";
             $name="Top tweeters";
-	    if ($_GET['export']) 
+	    if ($_GET['export'])
               $qry= "SELECT user_screen_name,user_name AS full_name,count(tweet_id) AS tweets,user_verified,user_location, user_lang AS user_language, user_bio,CONCAT('https://twitter.com/',user_screen_name) AS user_twitter_page  FROM $table ";
           else
- 	     
+
             $qry= "SELECT user_screen_name,count(tweet_id) AS tweets FROM $table ";
             $condition=preg_replace("/\s*WHERE/i"," AND ",$condition);
             $condition="WHERE is_protected_or_deleted is null ".$condition;
@@ -373,7 +373,7 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "(".$quer
 
         while ($row = $result->fetch_array())
           {
-           if ($row[0]) 
+           if ($row[0])
 	    {
 	      $data=$data."{name:'${row[0]}', y:".$row[1].", case:'$table', rank:'$j', sec:'$type', drilldown:null},\n";
               array_push($user_names,$row[0]);
@@ -397,7 +397,7 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "(".$quer
       echo $graph_data."<span id='$type'></span>";
 
       if ($limit>sizeof($user_names)) $limit=sizeof($user_names);
-     
+
       echo "<br><center><a href='".$_SERVER['REQUEST_URI']."&export=1'>Export to CSV file (full list of <b>$total</b> tweeters)</a></center><br>";
 
       for ($i=1; $i<=$limit; $i++)

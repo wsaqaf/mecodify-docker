@@ -1,8 +1,10 @@
 <?php
 
 $lifetime=6000;
-session_set_cookie_params($lifetime);
-session_start();
+if(!isset($_SESSION)){
+  session_set_cookie_params($lifetime);
+  session_start();
+}
 
 $enable_new_accounts=1; // set to 0 to disable new accounts (signup)
 $allow_new_cases=1; //allow adding new cases (can be set when you wish to prevent altering the DB
@@ -25,20 +27,15 @@ $smtp_port="";
 $smtp_user="";
 $smtp_pw="";
 
-$twitter_api_settings=array( // you need at least one set, there is no max!
-         array(
-          'oauth_access_token' => "",
-          'oauth_access_token_secret' => "",
-          'consumer_key' => "",
-          'consumer_secret' => ""
-          )
-        );
+$twitter_api_settings=array(
+   'bearer' => "", //here you enter the bearer code (usually starting with 'AAAA')
+   'is_premium' => true //here you indicate if the account is free (sandbox) or premium
+ );
+
 
 $platforms=array('1'=>'Twitter'); //Facebook and Youtube and other sources to be added in the future
-$search_methods=array('Twitter'=>array('0'=>'Search API','1'=>'Streaming API','2'=>'Web Search')); //Streaming API not activated yet
 
 $website_title=$website_title." (powered by Mecodify v".trim(file_get_contents("ver.no")).")";
-require_once('twitter-api-php-master/TwitterAPIExchange.php');
 
 $website_url=rtrim($website_url,"/");
 connect_mysql();
@@ -51,12 +48,12 @@ function connect_mysql()
     global $mysql_db; global $mysql_server; global $mysql_user; global $mysql_pw;
 
     $link = new mysqli($mysql_server, $mysql_user, $mysql_pw);
-      
+
     if (!mysqli_select_db($link, $mysql_db)) {
         if(mysqli_query($link, "CREATE DATABASE $mysql_db")){
             echo "DB Successfully created";
             mysqli_select_db($link, $mysql_db);
-        } 
+        }
         else {
                 echo "Failed to create DB. Exiting...";
                 echo "Error: Unable to connect to MySQL." . PHP_EOL;
@@ -119,6 +116,7 @@ function get_cases()
         $cases[$row['id']]['keywords']=$row['query'];
         $cases[$row['id']]['from']=$row['from_date'];
         $cases[$row['id']]['to']=$row['to_date'];
+        $cases[$row['id']]['include_retweets']=$row['include_retweets'];
         $cases[$row['id']]['top_only']=$row['top_only'];
         $cases[$row['id']]['details']=$row['details'];
         $cases[$row['id']]['creator']=$row['creator'];

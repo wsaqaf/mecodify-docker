@@ -23,9 +23,14 @@ SET time_zone = "+00:00";
 --
 -- Functions
 --
+DROP FUNCTION IF EXISTS `SPLIT_STRING`;
+DROP FUNCTION IF EXISTS `Nr_Twitter_Users`;
+
 CREATE DEFINER=`<USR>`@`<SRVR>` FUNCTION `SPLIT_STRING`(str VARCHAR(255), delim VARCHAR(12), pos INT) RETURNS varchar(255) CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci
 RETURN REPLACE(SUBSTRING(SUBSTRING_INDEX(str, delim, pos), LENGTH(SUBSTRING_INDEX(str, delim, pos-1)) + 1), delim, '');
 CREATE DEFINER=`<USR>`@`<SRVR>` FUNCTION `Nr_Twitter_Users`(year_value INT) RETURNS int(11)
+READS SQL DATA
+DETERMINISTIC
 BEGIN
    DECLARE twitter_users INT;
    IF year_value = 2006 THEN SET twitter_users = 0.1;
@@ -53,7 +58,7 @@ BEGIN
 
 CREATE TABLE IF NOT EXISTS `1_empty_all_mentions` (
   `tweet_id` bigint(20) unsigned DEFAULT NULL,
-  `responses` int(10) unsigned NOT NULL DEFAULT '0',
+  `replies` int(10) unsigned NOT NULL DEFAULT '0',
   `user_id` bigint(20) unsigned DEFAULT NULL,
   `user_screen_name` varchar(20) CHARACTER SET ascii DEFAULT NULL,
   `responses_to_tweeter` int(10) unsigned NOT NULL DEFAULT '0',
@@ -145,6 +150,8 @@ CREATE TABLE IF NOT EXISTS `1_empty_case` (
   `tweet_language` varchar(5) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `filter_level` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `is_retweet` tinyint(1) NOT NULL,
+  `is_quote` tinyint(1) NOT NULL,
+  `is_reply` tinyint(1) NOT NULL,
   `retweeted_tweet_id` bigint(20) unsigned DEFAULT NULL,
   `retweeted_user_id` bigint(20) unsigned DEFAULT NULL,
   `retweeter_ids` mediumtext,
@@ -155,14 +162,15 @@ CREATE TABLE IF NOT EXISTS `1_empty_case` (
   `has_link` tinyint(1) NOT NULL,
   `links` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `expanded_links` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `retweets` int(10) unsigned NOT NULL,
-  `favorites` int(10) unsigned DEFAULT NULL,
-  `responses` int(10) unsigned DEFAULT NULL,
+  `retweets` int(10) unsigned NOT NULL DEFAULT '0',
+  `quotes` int(10) unsigned NOT NULL DEFAULT '0',
+  `favorites` int(10) unsigned DEFAULT NULL DEFAULT '0',
+  `replies` int(10) unsigned DEFAULT NULL DEFAULT '0',
   `source` tinytext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `mentions_of_tweeter` int(10) unsigned DEFAULT NULL,
-  `contributors` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `context_annotations` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `possibly_sensitive` tinyint(1) DEFAULT NULL,
-  `is_truncated` tinyint(1) DEFAULT NULL,
+  `conversation_id` bigint(20) DEFAULT NULL,
   `withheld_copyright` tinyint(1) DEFAULT NULL,
   `withheld_in_countries` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `withheld_scope` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
@@ -181,11 +189,11 @@ CREATE TABLE IF NOT EXISTS `cases` (
   `name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `creator` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `platform` tinyint(3) unsigned NOT NULL DEFAULT '1',
-  `top_only` tinyint(1) NOT NULL DEFAULT '0',
-  `search_method` tinyint(3) unsigned NOT NULL DEFAULT '0',
+  `top_only` tinyint(1) unsigned NOT NULL DEFAULT '0',
+  `include_retweets` tinyint(1) unsigned NOT NULL DEFAULT '0',
   `query` varchar(2400) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `from_date` date DEFAULT NULL,
-  `to_date` date DEFAULT NULL,
+  `from_date` datetime DEFAULT NULL,
+  `to_date` datetime DEFAULT NULL,
   `details` varchar(2400) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `details_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `date_created` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -214,6 +222,11 @@ CREATE TABLE IF NOT EXISTS `members` (
   `verified` tinyint(1) NOT NULL DEFAULT '0',
   `verification_str` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+ALTER TABLE `members`
+  ADD PRIMARY KEY(`email`),
+  ADD INDEX(`email`);
 
 -- --------------------------------------------------------
 
@@ -271,30 +284,19 @@ CREATE TABLE IF NOT EXISTS `1_empty_user_mentions` (
   `in_response_to_user_name` tinytext COLLATE utf8mb4_unicode_ci,
   `in_response_to_user_followers` int(10) unsigned DEFAULT NULL,
   `in_response_to_user_verified` tinyint(1) DEFAULT NULL,
-  `response_user_followed` tinyint(1) DEFAULT NULL,
   `responses_to_tweet` int(10) unsigned DEFAULT NULL,
   `responses_to_tweeter` int(10) unsigned DEFAULT NULL,
   `mentions_of_tweeter` int(10) unsigned DEFAULT NULL,
   `mention1` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention1_followed` tinyint(1) DEFAULT NULL,
   `mention2` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention2_followed` tinyint(1) DEFAULT NULL,
   `mention3` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention3_followed` tinyint(1) DEFAULT NULL,
   `mention4` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention4_followed` tinyint(1) DEFAULT NULL,
   `mention5` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention5_followed` tinyint(1) DEFAULT NULL,
   `mention6` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention6_followed` tinyint(1) DEFAULT NULL,
   `mention7` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention7_followed` tinyint(1) DEFAULT NULL,
   `mention8` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention8_followed` tinyint(1) DEFAULT NULL,
   `mention9` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mentions9_followers` int(10) unsigned DEFAULT NULL,
-  `mention10` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mention10_followed` tinyint(1) DEFAULT NULL
+  `mention10` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
@@ -311,7 +313,7 @@ ALTER TABLE `1_empty_case`
   ADD KEY `quoted_tweet_id` (`quoted_tweet_id`),
   ADD KEY `retweets` (`retweets`),
   ADD KEY `user_screen_name` (`user_screen_name`),
-  ADD KEY `responses_to_tweeter` (`responses_to_tweeter`,`responses`,`mentions_of_tweeter`),
+  ADD KEY `responses_to_tweeter` (`responses_to_tweeter`,`replies`,`mentions_of_tweeter`),
   ADD KEY `in_reply_to_user` (`in_reply_to_user`);
 
 --
@@ -345,4 +347,3 @@ ALTER TABLE `1_empty_user_mentions`
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-
