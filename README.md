@@ -2,7 +2,7 @@
 
 This is a GitHub repo for those wishing to create a functional Ubuntu-based server with [mecodify](https://github.com/wsaqaf/mecodify) readily installed without having to worry about the need to install dependencies and do other setup. If you don't know how Docker works, check out this [useful guide](https://prakhar.me/docker-curriculum/).
 
-This repo is based on a repo [osx-docker-lamp](https://github.com/dgraziotin/osx-docker-lamp), a.k.a dgraziotin/lamp, which itself is a fork of [tutumcloud/tutum-docker-lamp](https://github.com/tutumcloud/lamp). I made a few modifications and added the mecodify-related files that are necessary for the application to work. 
+This repo is based on a repo [osx-docker-lamp](https://github.com/dgraziotin/osx-docker-lamp), a.k.a dgraziotin/lamp, which itself is a fork of [tutumcloud/tutum-docker-lamp](https://github.com/tutumcloud/lamp). I made a few modifications and added the mecodify-related files that are necessary for the application to work.
 
 So far, this repo has been demonstrated to work on Mac OSx but not on Windows. If you wish to provide feedback on how to adjust it to work on a Windows machine, please [contact us](mailto:admin@mecodify.org).
 
@@ -10,25 +10,28 @@ So far, this repo has been demonstrated to work on Mac OSx but not on Windows. I
 
 ##### 1) Download repo
 
-You can download the compressed files in [this repo](https://github.com/wsaqaf/mecodify-docker/archive/master.zip) and uncompress it on your device. Then you should use the command prompt (Terminal) to go inside the folder that is just created.
+You can clone the repo or download the compressed files in [this repo](https://github.com/wsaqaf/mecodify-docker/archive/master.zip) and uncompress it on your device. Then you should use the command prompt (Terminal) to go inside the folder that is just created.
 
 ##### 2) Create the docker images
 
 Assuming that you already have docker installed (get it from [here](https://docs.docker.com/engine/installation/) if you don't), in the directory where the Dockerfile file is located, run the following:
 
         docker build -t wsaqaf/mecodify .
- 
+
 The above command may take a few minutes or more (depending on your connection and processor speed) and should create two docker images, one for wsaqaf/mecodify and one for the Ubuntu base image (phusion/baseimage). The total could taking just over 900MB storage since they include a lot of files for ubuntu, apache, php, phpmyadmin, mysql along with mecodify.
 
 ##### 3) Add Twitter API Settings
 
-You will find the file configurations_empty.php in the mecodify folder. Rename it and fill in the website_url value and change any of the others if you need to. Additionally, you need to add values for the *twitter_api_settings* variable since it will not be possible for mecodify to extract tweets without doing so. Apply the firststep of [this informative tutorial](https://iag.me/socialmedia/how-to-create-a-twitter-app-in-8-easy-steps/) on how to create to get the required credentials for an app. You would then need to add the obtained information into configurations.php, namely the following four lines need to be filled. You don't need to create the app itself (don't move on to the next step of the tutorial):
+You will find the file configurations_empty.php in the mecodify folder. Rename it and fill in the website_url value and change any of the others if you need to. Additionally, you need to add values for the *twitter_api_settings* variable since it will not be possible for mecodify to extract tweets without doing so. You would then need to add the obtained information into *configurations.php*, namely the following four lines need to be filled. You don't need to create the app itself (don't move on to the next step of the tutorial):
 
-          'oauth_access_token' => "",
-          'oauth_access_token_secret' => "",
-          'consumer_key' => "",
-          'consumer_secret' => ""
-        
+    $twitter_api_settings=array(
+            'bearer' => "",
+            'is_premium' => true
+        );
+
+For the *bearer* value, enter the bearer token code you have for the Twitter app (usually starting with 'AAAA').
+For the *is_premium* value, specify if the account is free (sandbox) or premium. Change to *false* if you don't have a premium account.
+
 Everything else in the configuration file can remain the same.
 
 ##### 4) Create container (needed when docker is restared or configurations.php is modified)
@@ -49,7 +52,7 @@ From this point onwards, you can follow the instructions found in the original [
 ###### Thanks to the great work by [dgraziotin](https://github.com/dgraziotin), data in the folders mysql and app folders (in our case ./mecodify) are made so that they are persistent and updated in parallel both in the container and in the host. So whatever work you do on mecodify will be preserved. You can double check to make sure.
 
 ###### Apart fromt he Twitter API settings, the configurations.php file located in the ./mecodify directory has default values including the database and user name. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
-       
+
 ###### Only step (4) above is required when docker is restarted since the images are preserved in the file system. All the steps would need to be re-done if the files are removed or docker re-installed.  
 
 ##### Still experimental
