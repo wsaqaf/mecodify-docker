@@ -109,11 +109,11 @@ if ($_GET['inspect'])
            " OR user_mentions like '%@$user_name%' ". //mentioned only
            " $clear_text))) and is_protected_or_deleted is null order by date_time"; //repeated part of the tweet
 
-if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "<hr>(".$query.")";
+    if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "<hr>(".$query.")";
 
     if ($result=$link->query($query))
       {
-        if (!$result->num_rows) die("<b><br>This tweet has no interaction<br></b><a href='#' onclick=javascript:GetDetails('$url')><small>Back to the main list</small></a></center>");
+        if (!$result->num_rows) die("<b><br>This tweet has no replies or mentions<br></b><a href='#' onclick=javascript:GetDetails('$url')><small>Back to the main list</small></a></center>");
         $total=$result->num_rows;
       }
     else die("Error in query: ". $link->error.": $query");
@@ -123,7 +123,7 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "<hr>(".$
     $data=""; $last_five=rand(1000,9999);
     while ($row=$result->fetch_assoc())
       {
-	$found=""; $note=""; $tweet_marker="";
+	      $found=""; $note=""; $tweet_marker="";
 
         if ($row['in_reply_to_tweet']==$tweet_id)
           {
@@ -149,18 +149,18 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "<hr>(".$
           {
             $found="A mention of @$user_name (excluding direct or user replies)"; $note="error"; $m++; $tweet_marker=$tweet_id."_m";
           }
-          $i++;
-          $data=$data."<div class='$tweet_marker'><br><font size=+1>".$row['date_time']."</font><br>";
-          $data=$data."<div class='alert alert-$note'>";
-          $data=$data."<h4 class='alert-heading'><a href='${row['tweet_permalink_path']}' target=_blank>$found</a></h4>";
-          $data=$data."<a href='https://twitter.com/".$row['user_screen_name']."' target=_blank>".
-                      "<img src='".$row['user_image_url']."' alt='".$row['user_screen_name']."' align=left onerror=\"this.style.display='none'\" width=50> &nbsp;";
-          $data=$data.$row['user_name']." (".$row['user_screen_name'].")</a><br><br><blockquote><font color=black>".hyper_link($row['clear_text'])."</font></blockquote>";
-          $data=$data."<center><a href='?id=tweets&table=$table&user_screen_name=".$row['user_screen_name']."&load=1' target=_blank>More from this tweeter</a> in connection to (".$cases[$table]['name'].")</center><br><a href=";
-          $inspect_link="javascript:GetDetails('$url&inspect=1&tweet_id=${row['tweet_id']}&tweet_permalink_path=".rawurlencode($row['tweet_permalink_path'])."&user_id=${row['user_id']}&user_screen_name=${row['user_screen_name']}&date_time=".rawurlencode($row['date_time'])."&user_image_url=".rawurlencode($row['user_image_url'])."','".rawurlencode(addslashes($row['user_name']))."','".rawurlencode(addslashes($row['clear_text']))."','".$row['tweet_id'].$last_five."_branch')";
-          $inspect_link=str_replace("%0A","%20",$inspect_link);
-          $data=$data.$inspect_link."><img src='images/inspect.png' alt='see connected tweets'></a><br><div id='".$row['tweet_id'].$last_five."_branch'></div></div></div>";
-          if ($_GET['branch']) $data=$data;
+        $i++;
+        $data=$data."<div class='$tweet_marker'><br><font size=+1>".$row['date_time']."</font><br>";
+        $data=$data."<div class='alert alert-$note'>";
+        $data=$data."<h4 class='alert-heading'><a href='${row['tweet_permalink_path']}' target=_blank>$found</a></h4>";
+        $data=$data."<a href='https://twitter.com/".$row['user_screen_name']."' target=_blank>".
+                    "<img src='".$row['user_image_url']."' alt='".$row['user_screen_name']."' align=left onerror=\"this.style.display='none'\" width=50> &nbsp;";
+        $data=$data.$row['user_name']." (".$row['user_screen_name'].")</a><br><br><blockquote><font color=black>".hyper_link($row['clear_text'])."</font></blockquote>";
+        $data=$data."<center><a href='?id=tweets&table=$table&user_screen_name=".$row['user_screen_name']."&load=1' target=_blank>More from this tweeter</a> in connection to (".$cases[$table]['name'].")</center><br><a href=";
+        $inspect_link="javascript:GetDetails('$url&inspect=1&tweet_id=${row['tweet_id']}&tweet_permalink_path=".rawurlencode($row['tweet_permalink_path'])."&user_id=${row['user_id']}&user_screen_name=${row['user_screen_name']}&date_time=".rawurlencode($row['date_time'])."&user_image_url=".rawurlencode($row['user_image_url'])."','".rawurlencode(addslashes($row['user_name']))."','".rawurlencode(addslashes($row['clear_text']))."','".$row['tweet_id'].$last_five."_branch')";
+        $inspect_link=str_replace("%0A","%20",$inspect_link);
+        $data=$data.$inspect_link."><img src='images/inspect.png' alt='see connected tweets'></a><br><div id='".$row['tweet_id'].$last_five."_branch'></div></div></div>";
+        if ($_GET['branch']) $data=$data;
       }
 
 if (!$i) die("No related tweets to ($user_name) were found...");
@@ -174,7 +174,7 @@ if (!$_GET['branch'])
     if ($r) echo "<li><b>$r</b> a manual retweet (not through Twitter's retweet feature)</li>";
     if ($o) echo "<li><b>$o</b> exact copies of the tweet</li>";
     if ($p) echo "<li><b>$p</b> almost identical matches of the tweet</li>";
-    echo "</ul><b>Find the replies below sorted by the time they were posted:</b><br><br>";
+    echo "</ul><b>Find the replies/mentions below sorted by the time they were posted:</b><br><br>";
   }
 echo "</center>";
 if ($t) echo "<input type=checkbox id='show_t' name='show_t' checked onclick=toggle_tweets('$tweet_id','t');> Show tweet replies ($t)";
@@ -225,7 +225,7 @@ $name=$name." (other sources)";
           if ($_GET['video_tweets']) { $condition=$condition." $bool_op has_video=1 "; $name=$name." (with video only)"; $bool_op=$_GET['bool_op'];}
           if ($_GET['link_tweets']) { $condition=$condition." $bool_op has_link=1 "; $name=$name." (with link only)"; $bool_op=$_GET['bool_op'];}
           if ($_GET['retweet_tweets']) { $condition=$condition." $bool_op (is_retweet=1) ";  $name=$name." (are retweets)"; $bool_op=$_GET['bool_op'];}
-          if ($_GET['response_tweets']) { $condition=$condition." $bool_op (AND is_reply=1)";  $name=$name." (are replies)"; $bool_op=$_GET['bool_op'];}
+          if ($_GET['response_tweets']) { $condition=$condition." $bool_op (is_reply=1)";  $name=$name." (are replies)"; $bool_op=$_GET['bool_op'];}
           if ($_GET['quoting_tweets']) { $condition=$condition." $bool_op (is_quote=1) ";  $name=$name." (are quote tweets)"; $bool_op=$_GET['bool_op'];}
           if ($_GET['mentions_tweets']) { $condition=$condition." $bool_op (clear_text like '@%') ";  $name=$name." (are responses)"; $bool_op=$_GET['bool_op'];}
           if ($_GET['responded_tweets']) { $condition=$condition." $bool_op (replies is not null AND replies>0) ";  $name=$name." (are responsed to)"; $bool_op=$_GET['bool_op'];}
@@ -318,11 +318,11 @@ $name=$name." (other sources)";
 	 $params="";
 	 if ($retweets) $name=$name." of tweets+retweets ";
 	 elseif ($unique_tweeters) $name=$name." of unique tweeters ";
-         elseif ($normalized_tweets) $name=$name." of original tweets per tweeter";
-         elseif ($normalized_retweets) $name=$name." of (tweets+retweets) per tweeter";
-         elseif ($relative_tweeters) $name=$name." relative impact (tweeters)";
-         elseif ($relative_tweets) $name=$name." relative impact (original tweets)";
-         elseif ($relative_retweets) $name=$name." relative impact (tweets+retweets)";
+   elseif ($normalized_tweets) $name=$name." of original tweets per tweeter";
+   elseif ($normalized_retweets) $name=$name." of (tweets+retweets) per tweeter";
+   elseif ($relative_tweeters) $name=$name." relative impact (tweeters)";
+   elseif ($relative_tweets) $name=$name." relative impact (original tweets)";
+   elseif ($relative_retweets) $name=$name." relative impact (tweets+retweets)";
 	 else  $name=$name." of tweets ";
 	 foreach (array_keys($_GET) as $g)
 		{
@@ -384,7 +384,7 @@ $name=$name." (other sources)";
            $query=$query.$link2."SELECT UNIX_TIMESTAMP($param1, '+00:00', @@session.time_zone))*1000,100*((count(tweet_id)+sum(retweets))/Nr_Twitter_Users(YEAR(date_time))) from $table $condition group by $param2";
         elseif ($relative_tweets)
            $query=$query.$link2."SELECT UNIX_TIMESTAMP($param1, '+00:00', @@session.time_zone))*1000,100*(count(tweet_id)/Nr_Twitter_Users(YEAR(date_time))) from $table $condition group by $param2";
-        elseif ($retweets && !$cases[$table]['include_retweets'])
+        elseif ($retweets)
 	         $query=$query.$link2."SELECT UNIX_TIMESTAMP($param1, '+00:00', @@session.time_zone))*1000,count(tweet_id)+sum(retweets) from $table $condition group by $param2";
       	else
       	   $query=$query.$link2."SELECT UNIX_TIMESTAMP($param1, '+00:00', @@session.time_zone))*1000,count(tweet_id) from $table $condition group by $param2";
@@ -892,7 +892,7 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "<hr>(".$
                 "<td width=70><a href='#' onclick=javascript:GetDetails('$url&asc=$oppasc&order_f=1')>favorites".arrowdir($oppasc,'f')."</a>".
 		"<td width=70><a href='#' onclick=javascript:GetDetails('$url&asc=$oppasc&order_ri=1')>relative impact".arrowdir($oppasc,'ri')."</a></td>".
 		"</td><td width=70><a href='#' onclick=javascript:GetDetails('$url&asc=".proper_order("responded_tweets")."&order_rs=1')>".
-                "Interaction<br>(if any)".arrowdir($oppasc,'rs')."</a></td><td width=$per_page><a href='#' onclick=javascript:GetDetails('$url&asc=".$oppasc."&order_s=1')>Source".arrowdir($oppasc,'s')."</a></td><td width=40><a href='#' onclick=javascript:GetDetails('$url&asc=".$oppasc."&order_l=1')>Lang".arrowdir($oppasc,'l')."</a>".
+                "Replies<br>".arrowdir($oppasc,'rs')."</a></td><td width=$per_page><a href='#' onclick=javascript:GetDetails('$url&asc=".$oppasc."&order_s=1')>Source".arrowdir($oppasc,'s')."</a></td><td width=40><a href='#' onclick=javascript:GetDetails('$url&asc=".$oppasc."&order_l=1')>Lang".arrowdir($oppasc,'l')."</a>".
                 "</td><td width=50><a href='#' onclick=javascript:GetDetails('$url&asc=".proper_order("user_verified")."&order_v=1')>Verified user".arrowdir($oppasc,'v')."</a></td><td style='min-width:200px'>".
                 "<a href='#' onclick=javascript:GetDetails('$url&asc=".proper_order("image_retweets")."&order_i=1')>Image (if any)".arrowdir($oppasc,'i')."</a></td></tr>\n";
 		$url=$orig_url;
@@ -914,7 +914,7 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "<hr>(".$
             {
               if (!$_GET['export'])
                {
-		  if ($_GET['hashtag_cloud']) $hashtag_cloud=$hashtag_cloud." ".$row['hashtags'];
+		              if ($_GET['hashtag_cloud']) $hashtag_cloud=$hashtag_cloud." ".$row['hashtags'];
                   if ($cnt+1>=$p && $cnt<$pp)
                    {
                      $dataset=$dataset."data_set[$cnt]=[new Date(\"${row['date_time']}\"),${row['retweets']}];\n"."status[$cnt]=\"${row['tweet_id']}\";\n";
@@ -922,13 +922,12 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) echo "<hr>(".$
                      "<img src='${row['user_image_url']}'><a href='https://twitter.com/${row['user_screen_name']}' target=_blank onerror=\"this.style.display='none'\" width=50></a><br><a href='?id=tweets&table=$table&user_screen_name=${row['user_screen_name']}&load=1'>@${row['user_screen_name']}<br>${row['user_name']}</a><br><b>Followers:</b> ${row['user_followers']}<br><b>Following:</b> ${row['user_following']}<br><b>Created:</b> ".get_date($row['user_created'])."<br><b>Tweets:</b> ${row['user_tweets']}".profile_location($row['user_location'],$row['user_timezone'])."</td>".
                      "<td>".hyper_link($row['clear_text'])." - (<a href='${row['tweet_permalink_path']}' target=_blank>Link</a>)".location($row['location_name'],$row['location_fullname'])."</td>".
                      "<td><center>${row['retweets']}</center></td><td><center>${row['quotes']}</center></td><td><center>${row['favorites']}</center></td>".
- 		    "<td><center>${row['relative_impact']}</center></td>";
+ 		                 "<td><center>${row['relative_impact']}</center></td>";
                      if ($row['replies'])
                        {
-                         $dir_replies="<br>(with ".$row['replies']." recorded conversations)";
                          $inspect_link="javascript:GetDetails('$url&inspect=1&tweet_id=${row['tweet_id']}&tweet_permalink_path=".rawurlencode($row['tweet_permalink_path'])."&user_id=${row['user_id']}&user_screen_name=${row['user_screen_name']}&date_time=".rawurlencode($row['date_time'])."&user_image_url=".rawurlencode($row['user_image_url'])."','".rawurlencode(addslashes($row['user_name']))."','".rawurlencode(addslashes($row['clear_text']))."')";
                          $inspect_link=str_replace("%0A","%20",$inspect_link);
-                         $data=$data."<td><center>".$row['replies']."<br><a href=".$inspect_link."><img src='images/inspect.png' alt='see connected tweets'>$response_str$dir_replies</a></center></td>";
+                         $data=$data."<td><center>".$row['replies']."<br><a href=".$inspect_link."><img src='images/inspect.png' alt='see connected tweets'>$response_str</a></center></td>";
                        }
                      else
                        {
@@ -983,7 +982,7 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) { echo "qry:$q
                       $url=preg_replace('/\&p=[\d]+\&pp=[\d]+/','',$url);
                       $results= $results."<br><p align=right><a href='$url&export=1')><b>Export</b></a> all $total_rows records to CSV file</p>";
                       $results=$results."<b>Showing results $p - $total_rows of $total_rows";
-                      if ($retweets && !$cases[$table]['include_retweets']) $results=$results." [".($total_retweets+$total_rows)." with retweets] ";
+                      if ($retweets) $results=$results." [".($total_retweets+$total_rows)." with retweets] ";
                       elseif ($retweets) $results=$results." [".($total_rows)." with retweets] ";
 
                       if ($p>$per_page)
@@ -1002,7 +1001,7 @@ if ($debug && $_SESSION[basename(__DIR__).'email']==$admin_email) { echo "qry:$q
                     $url=preg_replace('/\&p=[\d]+\&pp=[\d]+/','',$url);
                     $results= $results."<br><p align=right><a href='$url&export=1')><b>Export</b></a> all $total_rows records to CSV file</p>";
                     $results=$results."<b>Showing results $p - $pp of $total_rows ";
-                    if ($retweets && !$cases[$table]['include_retweets']) $results=$results." [".($total_retweets+$total_rows)." with retweets] ";
+                    if ($retweets) $results=$results." [".($total_retweets+$total_rows)." with retweets] ";
                     elseif ($retweets) $results=$results." [".($total_rows)." with retweets] ";
                     if (!(($p-$per_page==1) && ($pp-$per_page==$per_page))) $ppstr="&p=".($p-$per_page)."&pp=".($pp-$per_page); else $ppstr="";
                     if ($p>$per_page) $results=$results."<center> <a href='#' onclick=javascript:GetDetails('$url$ppstr')> &lt; </a>  &nbsp;&nbsp; <a href='#' onclick=javascript:GetDetails('$url')><small>Back to first page</small></a> ";

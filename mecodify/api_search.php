@@ -18,7 +18,7 @@ if (!$argv[1]) die("Missing case...\n\n");
 $table=$argv[1];
 $from=$argv[2];
 $to=$argv[3];
-$include_associated=$argv[4];
+$include_referenced=$argv[4];
 $starting_point=$argv[5];
 $top_limit=array(1000,5000,10000);
 
@@ -75,13 +75,13 @@ else $end_time = str_replace(" ", "T",$cases[$table]['to']).".00Z";
 
 $include_retweets=$cases[$table]['include_retweets'];
 
-if (!$argv[4]) $include_associated=$cases[$table]['top_only'];
+if (!$argv[4]) $include_referenced=$cases[$table]['top_only'];
 
 $dates=array();
 $c=0;
 
 if (!$include_retweets) { $keywords=($keywords)."%20-is:retweet%20-is:quote"; }
-#if (!$include_associated) { $keywords=($keywords)."%20-filter:replies"; }
+#if (!$include_referenced) { $keywords=($keywords)."%20-filter:replies"; }
 
 get_tweet_ids($table,$keywords);
 tweeter_data($table);
@@ -112,7 +112,7 @@ function get_tweet_ids($table,$keywords)
   {
     global $link; global $mode; global $mysql_db; global $i; global $step2;
     global $global_step;  global $oldest_tweet_id; global $last_tweet_id;  global $max_list;
-    global $list_count; global $start_from; global $added; global $skipped; global $include_associated;
+    global $list_count; global $start_from; global $added; global $skipped; global $include_referenced;
     global $global_step_limit; global $max_per_page; global $count_total; global $next_token;
 
     $tweets_done=0;
@@ -124,12 +124,8 @@ function get_tweet_ids($table,$keywords)
         if ($next_token=="start") $next_token="";
 
 note("Starting page $pg\n");
-        $processed=get_other_fields($table,$keywords);
+        $processed=get_all_fields($table,$keywords);
         $pg++;
-//    if (!$processed) break;
-//    $max_id="&max_id=$oldest_tweet_id";
-//    $tweets_done=$tweets_done+$processed;
-//die("debug 3 - exiting");
      }
     if (!$tweets_done)
       {
@@ -139,11 +135,11 @@ note("Starting page $pg\n");
     note("Processed total of $tweets_done tweets\n");
   }
 
-function get_other_fields($table,$getfield)
+function get_all_fields($table,$getfield)
   {
     global $link; global $mysql_db; global $j; global $twitter_api_settings; global $last_setting;
     global $oldest_tweet_id; global $last_tweet_id; global $count_total;
-    global $added_users; global $next_token;
+    global $added_users; global $next_token; global $max_tweets_per_case;
 
     $last_setting=rand(0,sizeof($twitter_api_settings)-1);
 
@@ -172,10 +168,10 @@ function get_other_fields($table,$getfield)
           }
         else { note("Tweet object id missing!\n"); continue; }
 
-        extract_and_store_data($record,$recs,true);
+        extract_and_store_data($record,$recs,true,0);
         $i++;
         $count_total++;
-        if ($count_total==100000) { tweeter_data($table); $count_total=0; }
+        if ($count_total%100000==0 || $count_total>=$max_tweets_per_case) { tweeter_data($table); }
         $last_tweet_id=$record->id;
       }
     note("\nProcessed $i records ($oldest_tweet_id - $last_tweet_id) in $table\n");// for ($tweet_updated_rows tweets, $user_updated_rows users updated)\n";
@@ -244,9 +240,9 @@ function tweeter_data($table)
     draw_network($table);
  }
 
-function extract_and_store_data($tweet,$parent,$save_to_db)
+function extract_and_store_data($tweet,$parent,$save_to_db,$is_referenced)
   {
-    global $table; global $regex; global $cases; global $link; global $include_associated; global $retweet_keys;
+    global $table; global $regex; global $cases; global $link; global $include_referenced; global $retweet_keys;
     global $hash_cloud; global $from; global $to; global $added_users; global $added_tweets; global $include_retweets;
 
     if (in_array($tweet->id, $added_tweets_list)) return;
@@ -256,6 +252,7 @@ function extract_and_store_data($tweet,$parent,$save_to_db)
     $tw=array();
     $user=array();
     $tw['tweet_id']=$tweet->id;
+    $tw['is_referenced']=$is_referenced;
     if (isset($tweet->created_at))
       {
         $tw['date_time']=str_replace("T"," ",substr($tweet->created_at,0,19));
@@ -294,14 +291,14 @@ function extract_and_store_data($tweet,$parent,$save_to_db)
           				  {
           				    if ($subt->id == $rtw->id)
               					{
-              					  $tmp_tw=extract_and_store_data($subt,$parent,$include_associated);
+              					  $tmp_tw=extract_and_store_data($subt,$parent,$include_referenced,1);
                           foreach ($retweet_keys as $rk) { $tw[$rk]=$tmp_tw[$rk]; }
                           $tw['retweeted_user_id']=$tmp_tw['user_id'];
                           $tw['clear_text']="RT ".$tw['clear_text'];
                           $tw['raw_text']="RT ".$tw['raw_text'];
               					  break;
               					}
-                      else extract_and_store_data($subt,$parent,$include_associated);
+                      else extract_and_store_data($subt,$parent,$include_referenced,1);
           				  }
                 }
               else
@@ -316,7 +313,7 @@ function extract_and_store_data($tweet,$parent,$save_to_db)
                   {
                     if ($subt->id == $rtw->id)
                         {
-                          $tmp_tw=extract_and_store_data($subt,$parent,$include_associated);
+                          $tmp_tw=extract_and_store_data($subt,$parent,$include_referenced,1);
                           $tw['retweeted_user_id']=$tmp_tw['user_id'];
                           break;
                         }
@@ -329,7 +326,7 @@ function extract_and_store_data($tweet,$parent,$save_to_db)
                   {
                     if ($subt->id == $rtw->id)
                         {
-                          $tmp_tw=extract_and_store_data($subt,$parent,$include_associated);
+                          $tmp_tw=extract_and_store_data($subt,$parent,$include_referenced,1);
                           $tw['in_reply_to_user']=$tmp_tw['user_id'];
                           break;
                         }
@@ -356,7 +353,7 @@ function extract_and_store_data($tweet,$parent,$save_to_db)
                }
             else
               {
-                  if (!$added_users && $include_associated) { add_user($subt); $added_users=true; }
+                  if (!$added_users && $include_referenced) { add_user($subt); $added_users=true; }
               }
           }
       }
@@ -424,7 +421,6 @@ function extract_and_store_data($tweet,$parent,$save_to_db)
             $tw['has_link']=1;
             foreach($en->urls as $ur)
               {
-                //echo "Checking:".$ur->expanded_url."\n";
                 if (isset($ur->unwound_url)) $ur->expanded_url=$ur->unwound_url;
                 if (strpos($tw['links'],$ur->url)===true || strpos($tw['expanded_links'],$ur->expanded_url)===true) continue;
                 if (strpos($tw['links']=$tw['links'],$ur->url)===false) $tw['links']=$tw['links']." ".$ur->url;
@@ -486,9 +482,8 @@ function url_type($url)
 
 function put_tweet_in_database($tweet)
   {
-    global $table; global $i; //global $tweet_updated_rows; global $user_updated_rows;
+    global $table; global $i;
     global $link; global $fix_utf8;
-//    echo "($tweet)\n"; exit;
     if ($tweet)
      {
         $query = "REPLACE INTO `$table` ";
@@ -501,13 +496,9 @@ function put_tweet_in_database($tweet)
         $names=rtrim($names,","); $values=rtrim($values,",");
         $query="$query ($names) VALUES($values)";
 
-//echo "\ntweet query:\n\n$query\n"; //exit;
 
        $result = $link->query($query);
        if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
-  //   echo "Affected rows: ".mysql_affected_rows()."\n"; exit;
-  //   $a_rows=$link->affected_rows;
-  //   if ($link->affected_rows==1) $tweet_updated_rows++;
       }
  }
 function update_response_mentions()
@@ -547,7 +538,7 @@ function update_response_mentions()
         "SPLIT_STRING($table.user_mentions, ' ', 4),SPLIT_STRING($table.user_mentions, ' ', 5),SPLIT_STRING($table.user_mentions, ' ', 6),".
         "SPLIT_STRING($table.user_mentions, ' ', 7),SPLIT_STRING($table.user_mentions, ' ', 8),SPLIT_STRING($table.user_mentions, ' ', 9),".
         "SPLIT_STRING($table.user_mentions, ' ', 10) from $table where $table.user_mentions is not null or ($table.in_reply_to_tweet is not null and $table.in_reply_to_user is not null AND $table.is_protected_or_deleted is null and $table.date_time is not null)";
-//echo "\n\n$query\n\n";
+
         $result=$link->query($query);if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
 
         for ($i=1; $i<=10; $i++)
@@ -566,8 +557,6 @@ function update_response_mentions()
 
         $query="update $table,$all_m set $table.mentions_of_tweeter=$all_m.mentions_of_tweeter where LOWER($table.user_screen_name)=LOWER($all_m.user_screen_name) and $all_m.user_screen_name is not null";
         $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
-
-//        $link->query("DROP TABLE $all_m");
 
         $query="UPDATE user_mentions_".$table.",$table "."
         SET user_mentions_".$table.".in_response_to_tweet=$table.in_reply_to_tweet,user_mentions_".$table.".in_response_to_user_id=$table.in_reply_to_user
@@ -848,9 +837,9 @@ function update_kumu_files($table)
       fclose($fp);
       echo "Kumu: Saved CSV <a href='tmp/kumu/$table"."_"."mentions.csv'>file ($table"."_"."mentions.csv)</a><br>\n";
 
-echo "\n---\nResponse tweets"; print_r($all_responses);
-echo "\n---\nMentions tweets:\n"; print_r($all_mentions);
-echo "\n---\nUsers:\n"; print_r($all_users);
+#echo "\n---\nResponse tweets"; print_r($all_responses);
+#echo "\n---\nMentions tweets:\n"; print_r($all_mentions);
+#echo "\n---\nUsers:\n"; print_r($all_users);
 
       echo "\nKumu: Creating elements for users...";
       $first_line=array("Label","Image","User Verified","Link","Bio","Language","Location","Tweets","Followers",
@@ -944,35 +933,11 @@ function complete_url($qry)
   $result=$link->query($query); if (!$result) die("Invalid query: " . $link->sqlstate. "\n$query\n");
   $status = $result->fetch_assoc();
 
-//die ("status:(".$status['status'].")");
-
   if ($fresh_start)
     {
-      if ($status['status']!="completed")
+      if ($status['status']=="expanded_right")
         {
-          $query= "SELECT tweet_id,date_time from $table WHERE is_retweet<>1 order by tweet_id ASC";
-          if ($result = $link->query($query)) { if (!($result->num_rows)) $oldest_tweet_id=""; }
-          else die("Error in query: ". $link->error.": $query");
-          $row = $result->fetch_assoc();
-
-          if ($row)
-            {
-              $oldest_tweet_id=$row['tweet_id'];
-              $oldest_tweet_time=$row['date_time'];
-
-              if ($start_time) $st=str_replace(".00Z","",str_replace("T"," ",$start_time));
-              else { $st = new DateTime(gmdate("Y-m-d H:i:s")); $st->modify('-7 day'); $st=$st->format('Y-m-d H:i:s'); }
-              if ($oldest_tweet_time>$st)
-                {
-    //                $until_id="&until_id=$oldest_tweet_id";
-                    $end_time=str_replace(" ","T",$oldest_tweet_time).".00Z";
-                    note("Getting tweets before ".$oldest_tweet_time."\n");
-                }
-            }
-        }
-      else
-        {
-          $query= "SELECT tweet_id,date_time from $table WHERE is_retweet<>1 order by tweet_id DESC";
+          $query= "SELECT tweet_id,date_time from $table WHERE NOT is_referenced order by tweet_id DESC";
           if ($result = $link->query($query)) { if (!($result->num_rows)) $oldest_tweet_id=""; }
           else die("Error in query: ". $link->error.": $query");
           $row = $result->fetch_assoc();
@@ -987,12 +952,32 @@ function complete_url($qry)
 
               if ($newest_tweet_time<$et)
                 {
-        //                      $since_id="&since_id=$newest_tweet_id";
                   $start_time=str_replace(" ","T",$newest_tweet_time).".00Z";
                   note("Continuing to get tweets posted after $newest_tweet_id at ".$newest_tweet_time."\n");
                 }
             }
         }
+      elseif ($status['status']=="expanded_left" || $status['status']!="completed")
+          {
+            $query= "SELECT tweet_id,date_time from $table WHERE NOT is_referenced order by tweet_id ASC";
+            if ($result = $link->query($query)) { if (!($result->num_rows)) $oldest_tweet_id=""; }
+            else die("Error in query: ". $link->error.": $query");
+            $row = $result->fetch_assoc();
+
+            if ($row)
+              {
+                $oldest_tweet_id=$row['tweet_id'];
+                $oldest_tweet_time=$row['date_time'];
+
+                if ($start_time) $st=str_replace(".00Z","",str_replace("T"," ",$start_time));
+                else { $st = new DateTime(gmdate("Y-m-d H:i:s")); $st->modify('-7 day'); $st=$st->format('Y-m-d H:i:s'); }
+                if ($oldest_tweet_time>$st)
+                  {
+                      $end_time=str_replace(" ","T",$oldest_tweet_time).".00Z";
+                      note("Getting tweets before ".$oldest_tweet_time."\n");
+                  }
+              }
+          }
       update_cases_table("started");
       $fresh_start=false;
     }
@@ -1020,7 +1005,7 @@ function getapi_record($getfield)
           sleep($limit_reset-time());
       }
 
-    $url=complete_url($getfield); global $last_setting;
+    $url=complete_url($getfield);
 
     $response = cUrlGetData($url);
     $record=json_decode($response);
