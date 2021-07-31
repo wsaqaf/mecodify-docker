@@ -6,50 +6,46 @@ This repo is based on a repo [mattrayner/docker-lamp](https://github.com/mattray
 
 So far, this repo has been demonstrated to work on Mac OSx but not on Windows. If you wish to provide feedback on how to adjust it to work on a Windows machine, please [contact us](mailto:admin@mecodify.org).
 
-### Usage
+### Requirements
 
-##### 1) Install Docker
+##### 1) Get your Twitter API 2.0 BEARER token
+
+To use Mecodify, you must have already generated a bearer token that can be used to access Twitter API 2.0 endpoints. This can either be for a free limited sandbox app or for an app that has received approval with a premium license, for example through the Academic track. See instructions [here]().
+
+The most important information you will need is the bearer token, which you should protect and keep private since it is like a password that should never be shared.
+
+##### 2) Install Docker
 
 If you haven't done so, ensure you have installed and started running Docker. You can find the official downloadable packages [here](https://www.docker.com/products/docker-desktop).
 
-##### 2) Download repo
+##### 3) Download the Mecodify Docker repo
 
 You can clone the repo or download the compressed files in [this repo](https://github.com/wsaqaf/mecodify-docker/archive/master.zip) and uncompress it on your device. Then you should use the command prompt (Terminal) to go inside the folder that is just created.
 
-##### 3) Create the docker images
+### Installation
 
-Assuming that you already have docker installed (get it from [here](https://docs.docker.com/engine/installation/) if you don't), in the directory where the Dockerfile file is located, run the following:
+Assuming that you already have docker installed (get it from [here](https://docs.docker.com/engine/installation/) if you haven't).
 
-        docker build -t wsaqaf/mecodify .
+Run Terminal and change to the directory where you downloaded and uncompressed the Mecodify docker files. It should contain a file named 'Dockerfile'.
 
-The above command may take a few minutes or more (depending on your connection and processor speed) and should create two docker images, one for wsaqaf/mecodify and one for the Ubuntu base image (phusion/baseimage). The total could taking just over 900MB storage since they include a lot of files for ubuntu, apache, php, phpmyadmin, mysql along with mecodify.
+Once in the folder, run the following command:
 
-##### 4) Add Twitter API Settings
+    bash ./go.sh
 
-You will find the file configurations_empty.php in the mecodify folder. Rename it and fill in the website_url value and change any of the others if you need to. Additionally, you need to add values for the *twitter_api_settings* variable since it will not be possible for mecodify to extract tweets without doing so. You would then need to add the obtained information into *configurations.php*, namely the following four lines need to be filled. You don't need to create the app itself (don't move on to the next step of the tutorial):
+Be ready to provide your BEARER token if you haven't done so in an earlier installation.
 
-    $twitter_api_settings=array(
-            'bearer' => "",
-            'is_premium' => true
-        );
+The above command may take a few minutes or more (depending on your connection and processor speed) and should create two docker images, one for wsaqaf/mecodify and one for the Ubuntu base image (phusion/baseimage). The total could taking just over 3GB storage since they include a lot of files for ubuntu, apache, php, phpmyadmin, mysql along with mecodify.
 
-For the *bearer* value, enter the bearer token code you have for the Twitter app (usually starting with 'AAAA').
-For the *is_premium* value, specify if the account is free (sandbox) or premium. Change to *false* if you don't have a premium account.
+##### Running Mecodify
 
-Everything else in the configuration file can remain the same.
-
-##### 5) Create container (needed when docker is restared or configurations.php is modified)
-
-Run the following command from on the terminal window while in the folder where Dockerfile is located:
-
-    . ./go.sh
-
-The above command would run the container and have it accessible via port 80. If the port is being used by another server, it can be changed by modifying the relevant line in the go.sh file.
-
-##### 6) Start using mecodify
-
-Open [localhost](http://localhost) with your browser. In case you decided to use a port other than the default 80, don't forget to include it (e.g, if it is 8080, go to localhost:8080).
+Once installation is complete, you will get a note saying that you can open the platform using the local address: [127.0.0.1](http://127.0.0.1) or [localhost](http://localhost) with your browser. In case you decided to use a port other than the default 80, don't forget to include it (e.g, if it is 8080, go to localhost:8080).
 From this point onwards, you can follow the instructions found in the original [GitHub repo of Mecodify](https://github.com/wsaqaf/mecodify/blob/master/manual.md) to create accounts and add cases.
+
+To learn how to navigate through Mecodify, you can check out [its documentation](https://github.com/wsaqaf/mecodify/blob/master/manual.md).
+
+If you wish to work on the raw data collected by Mecodify, you should also be able to access the phpMyAdmin database entry at [localhost/phpmyadmin](http://localhost/phpmyadmin) to navigate and drill into the different tables under the *Mecodify* database. The default credentials are username *root* and without a password.
+
+#####
 
 ##### Notes
 
@@ -63,7 +59,7 @@ From this point onwards, you can follow the instructions found in the original [
 
 ##### Still experimental
 
-This repo is in its early initiation stage and we hope to improve it over time. Feel free to contribute, test and support this work. Note that the docker version is meant to be run locally on your device and therefore it uses the 'root' username and no password for the mysql server. If you wish to use it on a server, it is *highly recommended* to update the mysql login credentials manually.
+This repo is in development and we hope to improve it over time. Feel free to contribute, test and support this work. Note that the docker version is meant to be run locally on your device and therefore it uses the 'root' username and no password for the mysql server. If you wish to use it on a server, it is *highly recommended* to update the mysql login credentials manually.
 
 A special thank you goes to [pvanheus](https://github.com/pvanheus) for suggesting to create a docker for Mecodify. I also wish to thank members of the open-source community who have provided the community with the code that was used in this repo.
 
