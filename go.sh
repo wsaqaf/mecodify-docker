@@ -17,9 +17,12 @@ FILE="${PWD}/mecodify/configurations.php"
     			  printf "Setting the license type to premium...\n";
     			  sed -i '' 's/"is_premium"[[:blank:]]*=>[[:blank:]]*false/"is_premium" => true/' $FILE;
     			  break;;
-      		[Nn]* )
+          [Nn]* )
 		          printf "Setting the license type to sandbox (limited)...\n";
             sed -i '' 's/"is_premium"[[:blank:]]*=>[[:blank:]]*true/"is_premium" => false/' $FILE;
+            break;;
+          "")
+            sed -i '' 's/"is_premium"[[:blank:]]*=>[[:blank:]]*false/"is_premium" => true/' $FILE;
             break;;
       		* ) printf "Please answer with y or n.\n";
    		  esac
@@ -49,6 +52,7 @@ FILE="${PWD}/mecodify/configurations.php"
   	case $yn in
   	   [Yy]* ) rm -rf "${PWD}/mysql"; break;;
   	   [Nn]* ) break;;
+       "") break;;
   	   * ) printf "Please answer yes or no. \n";
       	esac
       done
