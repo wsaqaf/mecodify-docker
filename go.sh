@@ -11,7 +11,7 @@ FILE="${PWD}/mecodify/configurations.php"
   if grep -Eq '"bearer"[[:space:]]*=>[[:space:]]*""' $FILE; then
      printf "It appears that you have not added the Twitter API 2.0 BEARER token into the configurations file.\n"
      while true; do
-         read -p "Do you have a Twitter API premium account (e.g., based on an Academic license)? [Y/n]: " yn
+         read -rp "Do you have a Twitter API premium account (e.g., based on an Academic license)? [Y/n]: " yn
          case $yn in
       		[Yy]* )
     			  printf "Setting the license type to premium...\n";
@@ -28,7 +28,7 @@ FILE="${PWD}/mecodify/configurations.php"
    		  esac
       done
       printf "Please copy the full BEARER token and paste it below. This will only be required once.\n"
-      read -rp "BEARER token: "token
+      read -rp "BEARER token: " token
       if [ ${#token} -ge 10 ]; then
             etoken=$(printf '%s\n' "$token" | sed -e 's/[\/&]/\\&/g')
             sed -i '' 's/"bearer"[[:blank:]]*=>[[:blank:]]*""[[:blank:]]*,/"bearer" => "'"$etoken"'",/' $FILE;
