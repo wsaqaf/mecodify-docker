@@ -48,7 +48,7 @@ FILE="${PWD}/mecodify/configurations.php"
   if [ -d "${PWD}/mysql" ]; then
       printf "You have an existing mysql Mecodify database.\n"
       while true; do
-  	read -rp "Do you wish to keep or delete it? Enter y to keep, n to delete: [Y/n]" -i "y" yn
+  	read -rp "Do you wish to keep or delete it? Enter y to keep, n to delete: [Y/n]" yn
   	case $yn in
   	   [Yy]* ) rm -rf "${PWD}/mysql"; break;;
   	   [Nn]* ) break;;
