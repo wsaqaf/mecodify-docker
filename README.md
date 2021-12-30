@@ -59,8 +59,6 @@ If you wish to work on the raw data collected by Mecodify, you should also be ab
 
 ##### Be careful in handling the folder where you first installed the repo since losing the files there or overwriting them may mean that all your work is gone. You are recommended to keep backups in case.
 
-###### You can also access Mecodify's data directly on MySQL using phpMyAdmin by going to http://localhost/phpmyadmin and using the mysql credentials in the configuration file.
-
 ##### Still experimental
 
 This repo is in development and we hope to improve it over time. Feel free to contribute, test and support this work. Note that the docker version is meant to be run locally on your device and therefore it uses the 'root' username and no password for the mysql server. If you wish to use it on a server, it is *highly recommended* to update the mysql login credentials manually.
