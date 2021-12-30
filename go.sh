@@ -6,6 +6,8 @@ FILE="${PWD}/mecodify/configurations.php"
   if [ ! -f "$FILE" ]; then
      printf "Creating a new configurations.php file\n"
      cp "${PWD}/mecodify/configurations_empty.php" $FILE
+  else
+     printf "Using the current configurations.php file\n"
   fi
 
   if grep -Eq '"bearer"[[:space:]]*=>[[:space:]]*""' $FILE; then
@@ -13,7 +15,7 @@ FILE="${PWD}/mecodify/configurations.php"
      while true; do
          read -rp "Do you have a Twitter API premium account (e.g., based on an Academic license)? [Y/n]: " yn
          case $yn in
-      		[Yy]* )
+      	  [Yy]* )
     			  printf "Setting the license type to premium...\n";
     			  sed -i '' 's/"is_premium"[[:blank:]]*=>[[:blank:]]*false/"is_premium" => true/' $FILE;
     			  break;;
@@ -50,9 +52,9 @@ FILE="${PWD}/mecodify/configurations.php"
       while true; do
   	read -rp "Do you wish to keep or delete it? Enter y to keep, n to delete: [Y/n]" yn
   	case $yn in
-  	   [Yy]* ) rm -rf "${PWD}/mysql"; break;;
-  	   [Nn]* ) break;;
-       "") break;;
+  	   [Yn]* ) break;;
+           [Nn]* ) rm -rf "${PWD}/mysql"; break;;
+       	   "") break;;
   	   * ) printf "Please answer yes or no. \n";
       	esac
       done
