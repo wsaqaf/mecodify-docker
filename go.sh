@@ -4,10 +4,10 @@ clear
 FILE="${PWD}/mecodify/configurations.php"
 
   if [ ! -f "$FILE" ]; then
-     printf "Creating a new configurations.php file\n"
-     cp "${PWD}/mecodify/configurations_empty.php" $FILE
+     printf "Creating a new configurations.php file\n";
+     cp "${PWD}/mecodify/configurations_empty.php" $FILE;
   else
-     printf "Using the current configurations.php file\n"
+     printf "Using the current configurations.php file\n";
   fi
 
   if grep -Eq '"bearer"[[:space:]]*=>[[:space:]]*""' $FILE; then
