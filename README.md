@@ -53,7 +53,11 @@ If you wish to work on the raw data collected by Mecodify, you should also be ab
 
 ###### Apart from the Twitter API settings, the configurations.php file located in the ./mecodify directory has default values including the database and user name. If you are considering having this public, it is wise to not use docker but install each required components separately as explained in the official [GitHub repo](https://github.com/wsaqaf/mecodify).
 
-###### Only step (5) above is required when docker is restarted since the images are preserved in the file system. All the steps would need to be re-done if the files are removed or docker re-installed.  
+###### In case Docker is restarted, all you need is to run the container again (from the interface or command prompt). The images, database and files are all preserved in the file system.
+
+###### You can also access Mecodify's data directly on MySQL using phpMyAdmin by going to http://localhost/phpmyadmin and using the mysql credentials in the configuration file.
+
+##### Be careful in handling the folder where you first installed the repo since losing the files there or overwriting them may mean that all your work is gone. You are recommended to keep backups in case.
 
 ###### You can also access Mecodify's data directly on MySQL using phpMyAdmin by going to http://localhost/phpmyadmin and using the mysql credentials in the configuration file.
 
