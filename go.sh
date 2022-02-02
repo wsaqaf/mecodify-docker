@@ -77,7 +77,8 @@ create_db=0;
   i=60
 
   if [ $create_db=1 ]; then  
-      docker exec -it mecodify mysql -uroot -e "create database if not exists mecodify"
+      docker exec -it mecodify service mysql start &>/dev/null;
+      docker exec -it mecodify mysql -uroot -e "create database if not exists mecodify" &>/dev/null;
   fi
 
   while ! curl --output /dev/null --silent --head --fail localhost
