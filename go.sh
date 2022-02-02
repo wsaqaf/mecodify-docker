@@ -59,7 +59,8 @@ FILE="${PWD}/mecodify/configurations.php"
       	esac
       done
   else
-      printf "Creating Mecodify mysql database...\n\n";
+      printf "Creating mecodify mysql database...\n\n";
+      docker exec -it mecodify mysql -uroot -e "create database if not exists mecodify"
   fi
 
   docker buildx build --platform linux/amd64 -t wsaqaf/mecodify .
@@ -70,8 +71,15 @@ FILE="${PWD}/mecodify/configurations.php"
   docker cp mecodify/configurations.php `docker ps -aqf "name=mecodify"`:/var/www/html &>/dev/null;
   printf "Initializing and running server. Please wait.";
 
+  i=60
+
   while ! curl --output /dev/null --silent --head --fail localhost
           do printf "."
           sleep 1
+          if [ $i -le 0 ]; then
+            printf "Installation failed. Troubleshoot container's log files for errors.\n\n";
+            exit;
+      	 fi
+	 ((i--)) 	 
   done
   printf " Installation complete!\n\nOpen http://127.0.0.1 with your browser to access the Mecodify platform.\n";
