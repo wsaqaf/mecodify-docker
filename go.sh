@@ -3,9 +3,12 @@ clear
 
 FILE="${PWD}/mecodify/configurations.php"
 
+create_db=0;
+
   if [ ! -f "$FILE" ]; then
      printf "Creating a new configurations.php file\n";
      cp "${PWD}/mecodify/configurations_empty.php" $FILE;
+     create_db=1;
   else
      printf "Using the current configurations.php file\n";
   fi
@@ -60,7 +63,7 @@ FILE="${PWD}/mecodify/configurations.php"
       done
   else
       printf "Creating mecodify mysql database...\n\n";
-      docker exec -it mecodify mysql -uroot -e "create database if not exists mecodify"
+      create_db=1;
   fi
 
   docker buildx build --platform linux/amd64 -t wsaqaf/mecodify .
@@ -72,6 +75,10 @@ FILE="${PWD}/mecodify/configurations.php"
   printf "Initializing and running server. Please wait.";
 
   i=60
+
+  if [ $create_db=1 ]; then  
+      docker exec -it mecodify mysql -uroot -e "create database if not exists mecodify"
+  fi
 
   while ! curl --output /dev/null --silent --head --fail localhost
           do printf "."
