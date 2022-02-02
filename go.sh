@@ -3,12 +3,9 @@ clear
 
 FILE="${PWD}/mecodify/configurations.php"
 
-create_db=0;
-
   if [ ! -f "$FILE" ]; then
      printf "Creating a new configurations.php file\n";
      cp "${PWD}/mecodify/configurations_empty.php" $FILE;
-     create_db=1;
   else
      printf "Using the current configurations.php file\n";
   fi
@@ -63,7 +60,6 @@ create_db=0;
       done
   else
       printf "Creating mecodify mysql database...\n\n";
-      create_db=1;
   fi
 
   docker buildx build --platform linux/amd64 -t wsaqaf/mecodify .
@@ -74,15 +70,14 @@ create_db=0;
   docker cp mecodify/configurations.php `docker ps -aqf "name=mecodify"`:/var/www/html &>/dev/null;
   printf "Initializing and running server. Please wait.";
 
-  i=60
-
-  if [ $create_db=1 ]; then  
-      docker exec -it mecodify service mysql start &>/dev/null;
-      docker exec -it mecodify mysql -uroot -e "create database if not exists mecodify" &>/dev/null;
-  fi
+  i=200
 
   while ! curl --output /dev/null --silent --head --fail localhost
           do printf "."
+	  if [ $i -ge 50 ]; then  
+	      docker exec -it mecodify mysql -uroot -e "create database if not exists mecodify" &>/dev/null;
+	      sleep 1
+	  fi
           sleep 1
           if [ $i -le 0 ]; then
             printf "Installation failed. Troubleshoot container's log files for errors.\n\n";
