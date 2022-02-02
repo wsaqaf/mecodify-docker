@@ -62,7 +62,7 @@ FILE="${PWD}/mecodify/configurations.php"
       printf "Creating Mecodify mysql database...\n\n";
   fi
 
-  docker build -t wsaqaf/mecodify .
+  docker buildx build --platform linux/amd64 -t wsaqaf/mecodify .
 
   docker kill `docker ps -aqf "name=mecodify"` &>/dev/null;
   docker rm `docker ps -aqf "name=mecodify"` &>/dev/null;
