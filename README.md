@@ -6,11 +6,13 @@ This repo is based on a repo [mattrayner/docker-lamp](https://github.com/mattray
 
 So far, this repo has been demonstrated to work on Mac OSx but not on Windows. If you wish to provide feedback on how to adjust it to work on a Windows machine, please [contact us](mailto:admin@mecodify.org).
 
-### Requirements
+### Installation
+
+Follow the below steps to install Mecodify using the Docker method. You can also follow this video tutorial [here](https://youtu.be/95RQx9Jokwk). 
 
 ##### 1) Get your Twitter API 2.0 BEARER token
 
-To use Mecodify, you must have already generated a bearer token that can be used to access Twitter API 2.0 endpoints. This can either be for a free limited sandbox app or for an app that has received approval with a premium license, for example through the Academic track. See instructions [here]().
+To use Mecodify, you must have already generated a bearer token that can be used to access Twitter API 2.0 endpoints. This can either be for a free limited sandbox app or for an app that has received approval with a premium license, for example through the Academic track. 
 
 The most important information you will need is the bearer token, which you should protect and keep private since it is like a password that should never be shared.
 
